@@ -23,7 +23,7 @@ export const convertToolsToOpenAIFormat = () => {
       name: tool.name,
       description: tool.description,
       parameters: {
-        type: "object",
+        type: "object" as const,
         properties: tool.parameters.properties,
         required: tool.parameters.required || []
       }
@@ -84,6 +84,7 @@ export const sendChatMessage = async (
     const data = await response.json();
     let content = "";
     let toolCalls: ToolCall[] | undefined;
+    let reasoningContent: string | undefined;
 
     if (typeof data === "string") {
       content = data;
@@ -107,6 +108,7 @@ export const sendChatMessage = async (
     else if (data.choices && data.choices[0]?.message) {
       const message = data.choices[0].message;
       content = message.content || "";
+      reasoningContent = message.reasoning_content || undefined;
       
       if (message.tool_calls && Array.isArray(message.tool_calls)) {
         toolCalls = message.tool_calls.map((tc: any) => ({
@@ -125,7 +127,7 @@ export const sendChatMessage = async (
       throw new Error("Invalid response format");
     }
 
-    return { content, tool_calls: toolCalls };
+    return { content, tool_calls: toolCalls, reasoning_content: reasoningContent };
   }
   catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
@@ -274,7 +276,7 @@ export const executeTaskWithAgent = async (action: TaskAction): Promise<TaskResu
 
 export const createToolMessage = (
   toolCallId: string,
-  toolName: string,
+  _toolName: string,
   result: TaskResult
 ) => ({
   role: "tool" as const,

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Message, TaskRequest, Task, TaskStatus, Conversation, ToolCall } from "../types";
 import { useConfigContext } from "../contexts/ConfigContext";
 import { useTaskExecutor } from "../hooks/useTaskExecutor";
@@ -6,11 +6,9 @@ import {
   sendChatMessage, 
   parseToolCallToTaskRequest, 
   convertToolsToOpenAIFormat, 
-  createToolMessage,
   SYSTEM_PROMPT
 } from "../services/api";
 import TaskConfirmation from "./TaskConfirmation";
-import TaskExecution from "./TaskExecution";
 
 interface ChatAreaProps {
   conversation: Conversation | null;
@@ -169,12 +167,25 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
 
     const chatMessages = [
       { role: "system" as const, content: SYSTEM_PROMPT },
-      ...currentMessages.map((m) => ({
-        role: m.role as "user" | "assistant" | "system",
-        content: m.content,
-        tool_call_id: m.tool_call_id
-      }))
-    ].filter(m => m.content || m.tool_call_id);
+      ...currentMessages.map((m) => {
+        const msg: Record<string, any> = {
+          role: m.role,
+        };
+        if (m.role === "assistant" && m.tool_calls) {
+          msg.content = m.content || null;
+          msg.tool_calls = m.tool_calls;
+        } else {
+          msg.content = m.content;
+        }
+        if (m.role === "tool" && m.tool_call_id) {
+          msg.tool_call_id = m.tool_call_id;
+        }
+        if (m.role === "assistant" && m.reasoning_content) {
+          msg.reasoning_content = m.reasoning_content;
+        }
+        return msg;
+      })
+    ].filter(m => m.content || m.tool_calls || m.tool_call_id || m.reasoning_content);
 
     const tools = convertToolsToOpenAIFormat();
 
@@ -198,7 +209,8 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
         role: "assistant",
         content: response.content || "正在执行工具...",
         timestamp: new Date(),
-        tool_calls: response.tool_calls
+        tool_calls: response.tool_calls,
+        reasoning_content: response.reasoning_content
       };
 
       const messagesWithResponse = [...currentMessages, assistantMessage];
@@ -227,7 +239,8 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
           id: crypto.randomUUID(),
           role: "assistant",
           content: response.content,
-          timestamp: new Date()
+          timestamp: new Date(),
+          reasoning_content: response.reasoning_content
         };
         const messagesWithResponse = [...currentMessages, assistantMessage];
         setMessages(messagesWithResponse);
@@ -245,7 +258,6 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
     if (!inputText.trim() || isLoading || !conversation) return;
 
     setErrorMessage(null);
-    setCurrentTask(null);
 
     if (!config.base_url) {
       setErrorMessage("请先在设置页面配置 API 地址");
@@ -284,8 +296,6 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
       minute: "2-digit"
     });
   };
-
-  const [currentTask, setCurrentTask] = useState<Task | null>(null);
 
   return (
     <div className="flex-1 flex flex-col bg-gradient-to-b from-slate-900 to-slate-950 h-screen">
@@ -382,6 +392,21 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
               )}
               <div className="flex flex-col gap-1.5">
                 <div className={`max-w-[75%] rounded-2xl px-5 py-4 shadow-soft ${message.role === "user" ? "bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-tr-sm shadow-primary-500/20" : "bg-slate-800/80 text-slate-100 rounded-tl-sm border border-slate-700/50"}`}>
+                  {message.role === "assistant" && message.reasoning_content && (
+                    <details className="mb-3 group">
+                      <summary className="cursor-pointer text-xs font-medium text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                        思考过程
+                      </summary>
+                      <div className="mt-2 pt-2 border-t border-purple-500/20">
+                        <p className="text-xs text-slate-400 font-mono bg-slate-900/50 rounded-lg p-3 max-h-40 overflow-y-auto">
+                          {message.reasoning_content}
+                        </p>
+                      </div>
+                    </details>
+                  )}
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                 </div>
                 <span className={`text-xs px-1.5 ${message.role === "user" ? "text-right text-slate-500" : "text-slate-600"}`}>

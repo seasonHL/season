@@ -70,7 +70,6 @@ function TaskConfirmation({
   };
 
   const formatArguments = (action: any, type: string) => {
-    const colors = getActionColor(type);
     
     switch (type) {
       case "FileRead":
