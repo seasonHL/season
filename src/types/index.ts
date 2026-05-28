@@ -3,11 +3,12 @@ import { Static, Type } from "@sinclair/typebox";
 
 export interface Message {
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
   timestamp: Date;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
+  reasoning_content?: string;
 }
 
 export interface ToolCall {
@@ -116,10 +117,13 @@ export interface Config {
 export type View = "chat" | "settings";
 export interface ChatRequest {
   model: string;
-  messages: {
-    role: "user" | "assistant" | "system";
-    content: string;
-  }[];
+  messages: Array<{
+    role: "user" | "assistant" | "system" | "tool";
+    content: string | null;
+    tool_calls?: ToolCall[];
+    tool_call_id?: string;
+    reasoning_content?: string;
+  }>;
   tools?: Array<{
     type: "function";
     function: {
@@ -139,6 +143,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   content: string;
   tool_calls?: ToolCall[];
+  reasoning_content?: string;
   error?: string;
 }
 
