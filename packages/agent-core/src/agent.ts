@@ -57,6 +57,7 @@ export class Agent<TTaskRequest = unknown> {
 
   setMessages(messages: AgentMessage[]) {
     this.history = [...messages];
+    this.iterations = 0;
   }
 
   appendUserMessage(content: string): AgentMessage {
