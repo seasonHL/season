@@ -1,4 +1,7 @@
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
+import remarkGfm from "remark-gfm";
 import { Message, TaskRequest, Task, TaskStatus, Conversation, ToolCall } from "../types";
 import { useConfigContext } from "../contexts/ConfigContext";
 import { useMemory } from "../hooks/useMemory";
@@ -28,6 +31,29 @@ interface ToolCallItem {
     error?: string;
   };
   status: "pending" | "executing" | "completed" | "failed";
+}
+
+function MessageMarkdown({
+  content,
+  role,
+}: {
+  content: string;
+  role: "user" | "assistant" | "system";
+}) {
+  return (
+    <div className={`markdown-message ${role === "user" ? "markdown-message-user" : "markdown-message-assistant"}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+        components={{
+          a: ({ node: _node, ...props }) => (
+            <a {...props} target="_blank" rel="noreferrer" />
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 function ChatArea({ conversation, onCreateConversation, onSaveConversation }: ChatAreaProps) {
@@ -356,7 +382,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
                       </div>
                     </details>
                   )}
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                  <MessageMarkdown content={message.content} role={message.role} />
                 </div>
                 <span className={`text-xs px-1.5 ${message.role === "user" ? "text-right text-[#7d8d89]" : "text-[#8b9895]"}`}>
                   {formatTime(message.timestamp)}
