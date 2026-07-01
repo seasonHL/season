@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { TaskAction, TaskRequest, TaskResult } from '../types';
-import { executeTaskWithAgent } from '../services/api';
 export const useTaskExecutor = () => {
  const executeTask = useCallback(async (action: TaskAction): Promise<TaskResult> => {
  try {
@@ -16,11 +15,7 @@ export const useTaskExecutor = () => {
  };
  }
  }, []);
- const executeTaskAgent = useCallback(async (action: TaskAction): Promise<TaskResult> => {
- return executeTaskWithAgent(action);
- }, []);
  return {
  executeTask,
- executeTaskAgent,
  };
 };

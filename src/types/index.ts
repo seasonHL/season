@@ -1,4 +1,3 @@
-import { AgentMessage as CoreAgentMessage, AgentTool } from "@earendil-works/pi-agent-core";
 import { Static, Type } from "@sinclair/typebox";
 
 export interface Message {
@@ -199,5 +198,3 @@ export interface Conversation {
  created_at: Date;
  updated_at: Date;
 }
-export type AgentMessage = CoreAgentMessage;
-export type AppAgentTool = AgentTool<TaskActionSchema, TaskResult>;

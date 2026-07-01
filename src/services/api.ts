@@ -1,8 +1,4 @@
-import { Agent, AgentEvent, convertToLlm, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { ChatRequest, ChatResponse, TaskAction, TaskRequest, TaskResult, TOOLS, SYSTEM_PROMPT, ToolCall } from "../types";
-import { invoke } from "@tauri-apps/api/core";
-
-export type { AgentEvent };
 
 export const buildApiUrl = (baseUrl: string): string => {
   if (!baseUrl) return "";
@@ -234,44 +230,6 @@ export const parseTaskFromResponse = (content: string): TaskRequest | null => {
 
 export const extractTextWithoutTask = (content: string): string => {
   return content.replace(/<task>[\s\S]*?<\/task>/, "").trim();
-};
-
-const executeTaskAction = async (action: TaskAction): Promise<TaskResult> => {
-  try {
-    const request: TaskRequest = { action };
-    const result = await invoke<TaskResult>('execute_task', { request });
-    return result;
-  }
-  catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
-  }
-};
-
-export const createAgent = (apiKey: string, onEvent: (event: AgentEvent) => void) => {
-  const agent = new Agent({
-    convertToLlm: (messages: AgentMessage[]) => convertToLlm(messages),
-    getApiKey: () => apiKey,
-    toolExecution: "sequential",
-    beforeToolCall: async (context) => {
-      console.log("准备执行工具:", context.toolCall);
-      return undefined;
-    },
-    afterToolCall: async (context) => {
-      console.log("工具执行完成:", context.result);
-      return undefined;
-    },
-  });
-  const unsubscribe = agent.subscribe((event) => {
-    onEvent(event);
-  });
-  return { agent, unsubscribe };
-};
-
-export const executeTaskWithAgent = async (action: TaskAction): Promise<TaskResult> => {
-  return executeTaskAction(action);
 };
 
 export const createToolMessage = (

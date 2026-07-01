@@ -1,0 +1,56 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Config {
+    pub base_url: String,
+    pub api_key: String,
+    pub model: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", content = "payload")]
+pub enum TaskAction {
+    FileRead { path: String },
+    FileWrite { path: String, content: String },
+    ExecuteCommand { command: String, args: Vec<String> },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TaskRequest {
+    pub action: TaskAction,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TaskResult {
+    pub success: bool,
+    pub data: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Message {
+    pub id: String,
+    pub role: String,
+    pub content: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Task {
+    pub id: String,
+    pub task_request: TaskRequest,
+    pub status: String,
+    pub result: Option<TaskResult>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Conversation {
+    pub id: String,
+    pub title: String,
+    pub messages: Vec<Message>,
+    pub tasks: Vec<Task>,
+    pub created_at: String,
+    pub updated_at: String,
+}

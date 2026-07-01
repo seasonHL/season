@@ -126,19 +126,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
       tool_call_id: toolCall.id
     }));
 
-    const updatedTasks = tasks.map((task, idx) => {
-      const execIdx = idx - tasks.length + newExecutingToolCalls.length;
-      if (execIdx >= 0 && execIdx < newExecutingToolCalls.length) {
-        const result = toolResults[execIdx]?.result;
-        return {
-          ...task,
-          status: result?.success ? TaskStatus.COMPLETED : TaskStatus.FAILED,
-          result: result ? { success: result.success, data: result.data, error: result.error } : undefined,
-          updated_at: new Date()
-        };
-      }
-      return task;
-    }).concat(newTasks.map((task, idx) => ({
+    const completedNewTasks = newTasks.map((task, idx) => ({
       ...task,
       status: toolResults[idx]?.result?.success ? TaskStatus.COMPLETED : TaskStatus.FAILED,
       result: toolResults[idx]?.result ? { 
@@ -147,7 +135,8 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
         error: toolResults[idx]!.result.error 
       } : undefined,
       updated_at: new Date()
-    })));
+    }));
+    const updatedTasks = [...tasks, ...completedNewTasks];
 
     const allMessages = [...messages, ...toolMessages];
     setMessages(allMessages);
