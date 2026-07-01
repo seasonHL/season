@@ -1,10 +1,11 @@
+use crate::memory::{append_memory, read_memory};
 use crate::models::{TaskAction, TaskRequest, TaskResult};
 use crate::security::{is_command_allowed, is_path_safe};
 use std::fs;
 use std::process::Command as ProcessCommand;
 
 #[tauri::command]
-pub async fn execute_task(request: TaskRequest) -> TaskResult {
+pub async fn execute_task(app: tauri::AppHandle, request: TaskRequest) -> TaskResult {
     match request.action {
         TaskAction::FileRead { path } => {
             if !is_path_safe(&path) {
@@ -92,5 +93,33 @@ pub async fn execute_task(request: TaskRequest) -> TaskResult {
                 },
             }
         }
+        TaskAction::MemoryRead => match read_memory(&app) {
+            Ok(content) => TaskResult {
+                success: true,
+                data: Some(if content.trim().is_empty() {
+                    "暂无长期记忆".to_string()
+                } else {
+                    content
+                }),
+                error: None,
+            },
+            Err(e) => TaskResult {
+                success: false,
+                data: None,
+                error: Some(e),
+            },
+        },
+        TaskAction::MemoryWrite { content } => match append_memory(&app, content) {
+            Ok(memory) => TaskResult {
+                success: true,
+                data: Some(format!("长期记忆已更新:\n{}", memory)),
+                error: None,
+            },
+            Err(e) => TaskResult {
+                success: false,
+                data: None,
+                error: Some(e),
+            },
+        },
     }
 }

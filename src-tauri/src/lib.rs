@@ -1,5 +1,6 @@
 mod config;
 mod conversations;
+mod memory;
 mod models;
 mod security;
 mod task;
@@ -8,6 +9,7 @@ use config::{load_config, save_config};
 use conversations::{
     delete_conversation, load_conversation, load_conversations, save_conversation,
 };
+use memory::{load_memory, save_memory};
 use task::execute_task;
 
 #[tauri::command]
@@ -27,6 +29,8 @@ pub fn run() {
             save_config,
             load_config,
             execute_task,
+            load_memory,
+            save_memory,
             save_conversation,
             load_conversations,
             load_conversation,

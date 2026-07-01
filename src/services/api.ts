@@ -1,4 +1,4 @@
-import { ChatRequest, ChatResponse, TaskAction, TaskRequest, TaskResult, TOOLS, SYSTEM_PROMPT, ToolCall } from "../types";
+import { ChatRequest, ChatResponse, ToolCall } from "../types";
 
 export const buildApiUrl = (baseUrl: string): string => {
   if (!baseUrl) return "";
@@ -10,21 +10,6 @@ export const buildApiUrl = (baseUrl: string): string => {
     return `${url}/v1/messages`;
   }
   return `${url}/chat/completions`;
-};
-
-export const convertToolsToOpenAIFormat = () => {
-  return TOOLS.map(tool => ({
-    type: "function" as const,
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: {
-        type: "object" as const,
-        properties: tool.parameters.properties,
-        required: tool.parameters.required || []
-      }
-    }
-  }));
 };
 
 export const sendChatMessage = async (
@@ -41,7 +26,6 @@ export const sendChatMessage = async (
     }
 
     const apiUrl = buildApiUrl(baseUrl);
-    console.log(`构建的 API URL: ${apiUrl}`);
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json"
@@ -60,9 +44,6 @@ export const sendChatMessage = async (
       requestBody.tools = request.tools;
       requestBody.tool_choice = request.tool_choice || "auto";
     }
-
-    console.log(`API 请求头:`, headers);
-    console.log(`API 请求体:`, JSON.stringify(requestBody, null, 2));
 
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -132,119 +113,4 @@ export const sendChatMessage = async (
       error: errorMessage
     };
   }
-};
-
-export const parseToolCallToTaskRequest = (toolCall: ToolCall): TaskRequest | null => {
-  try {
-    const { name, arguments: argsStr } = toolCall.function;
-    const args = JSON.parse(argsStr);
-
-    switch (name) {
-      case "FileRead":
-        if (!args.path) return null;
-        return {
-          action: {
-            type: "FileRead",
-            payload: { path: args.path }
-          }
-        };
-
-      case "FileWrite":
-        if (!args.path || !args.content) return null;
-        return {
-          action: {
-            type: "FileWrite",
-            payload: {
-              path: args.path,
-              content: args.content
-            }
-          }
-        };
-
-      case "ExecuteCommand":
-        if (!args.command) return null;
-        return {
-          action: {
-            type: "ExecuteCommand",
-            payload: {
-              command: args.command,
-              args: args.args || []
-            }
-          }
-        };
-
-      default:
-        console.warn(`Unknown tool name: ${name}`);
-        return null;
-    }
-  }
-  catch (error) {
-    console.error("Failed to parse tool call:", error);
-    return null;
-  }
-};
-
-export const parseTaskFromResponse = (content: string): TaskRequest | null => {
-  try {
-    const taskRegex = /<task>([\s\S]*?)<\/task>/;
-    const match = content.match(taskRegex);
-    if (!match) {
-      return null;
-    }
-    const taskJson = JSON.parse(match[1].trim());
-    let action: TaskAction;
-    switch (taskJson.type) {
-      case "FileRead":
-        action = {
-          type: "FileRead",
-          payload: { path: taskJson.path }
-        };
-        break;
-      case "FileWrite":
-        action = {
-          type: "FileWrite",
-          payload: {
-            path: taskJson.path,
-            content: taskJson.content
-          }
-        };
-        break;
-      case "ExecuteCommand":
-        action = {
-          type: "ExecuteCommand",
-          payload: {
-            command: taskJson.command,
-            args: taskJson.args || []
-          }
-        };
-        break;
-      default:
-        return null;
-    }
-    return { action };
-  }
-  catch {
-    return null;
-  }
-};
-
-export const extractTextWithoutTask = (content: string): string => {
-  return content.replace(/<task>[\s\S]*?<\/task>/, "").trim();
-};
-
-export const createToolMessage = (
-  toolCallId: string,
-  _toolName: string,
-  result: TaskResult
-) => ({
-  role: "tool" as const,
-  content: result.success 
-    ? result.data || "操作成功完成"
-    : `错误: ${result.error || "未知错误"}`,
-  tool_call_id: toolCallId
-});
-
-export {
-  TOOLS,
-  SYSTEM_PROMPT
 };

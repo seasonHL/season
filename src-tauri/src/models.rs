@@ -13,6 +13,8 @@ pub enum TaskAction {
     FileRead { path: String },
     FileWrite { path: String, content: String },
     ExecuteCommand { command: String, args: Vec<String> },
+    MemoryRead,
+    MemoryWrite { content: String },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

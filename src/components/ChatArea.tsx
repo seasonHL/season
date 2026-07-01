@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { Message, TaskRequest, Task, TaskStatus, Conversation, ToolCall } from "../types";
 import { useConfigContext } from "../contexts/ConfigContext";
+import { useMemory } from "../hooks/useMemory";
 import { useTaskExecutor } from "../hooks/useTaskExecutor";
 import { Agent } from "@season/agent-core";
-import { convertToolsToOpenAIFormat, parseToolCallToTaskRequest, SYSTEM_PROMPT } from "../services/api";
+import { buildSystemPrompt } from "../agent/systemPrompt";
 import { ApiChatProvider } from "../services/agentProvider";
+import { parseToolCallToTaskRequest, toolDefinitions } from "../tools/registry";
 import TaskConfirmation from "./TaskConfirmation";
 
 interface ChatAreaProps {
@@ -40,6 +42,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { config } = useConfigContext();
   const { executeTask } = useTaskExecutor();
+  const { memory, loadMemory } = useMemory();
 
   useEffect(() => {
     setMessages(conversation?.messages || []);
@@ -140,13 +143,15 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
       setExecutingToolCalls([]);
     }, 2000);
 
-    await continueConversation(conversation, allMessages, updatedTasks);
+    const latestMemory = await loadMemory();
+    await continueConversation(conversation, allMessages, updatedTasks, latestMemory);
   };
 
   const continueConversation = async (
     activeConversation: Conversation,
     currentMessages: Message[],
-    currentTasks: Task[]
+    currentTasks: Task[],
+    memorySnapshot = memory
   ) => {
     if (!config.base_url) {
       setErrorMessage("请先在设置页面配置 API 地址");
@@ -159,8 +164,8 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     const agent = new Agent<TaskRequest>({
       model: config.model,
       provider: new ApiChatProvider(config),
-      systemPrompt: SYSTEM_PROMPT,
-      tools: convertToolsToOpenAIFormat(),
+      systemPrompt: buildSystemPrompt(memorySnapshot),
+      tools: toolDefinitions,
       initialMessages: currentMessages,
       parseToolCall: parseToolCallToTaskRequest,
     });
@@ -207,8 +212,8 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     const agent = new Agent<TaskRequest>({
       model: config.model,
       provider: new ApiChatProvider(config),
-      systemPrompt: SYSTEM_PROMPT,
-      tools: convertToolsToOpenAIFormat(),
+      systemPrompt: buildSystemPrompt(memory),
+      tools: toolDefinitions,
       initialMessages: messages,
       parseToolCall: parseToolCallToTaskRequest,
     });
