@@ -12,7 +12,12 @@ import TaskConfirmation from "./TaskConfirmation";
 
 interface ChatAreaProps {
   conversation: Conversation | null;
-  onSaveConversation: (messages: Message[], tasks: Task[]) => void;
+  onCreateConversation: () => Conversation;
+  onSaveConversation: (
+    conversation: Conversation,
+    messages: Message[],
+    tasks: Task[]
+  ) => Promise<void>;
 }
 
 interface ToolCallItem {
@@ -26,7 +31,7 @@ interface ToolCallItem {
   status: "pending" | "executing" | "completed" | "failed";
 }
 
-function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
+function ChatArea({ conversation, onCreateConversation, onSaveConversation }: ChatAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [inputText, setInputText] = useState("");
@@ -83,7 +88,7 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
     }));
 
     setTasks(prev => [...prev, ...newTasks]);
-    onSaveConversation(messages, [...tasks, ...newTasks]);
+    await onSaveConversation(conversation, messages, [...tasks, ...newTasks]);
 
     const toolResults: Array<{ toolCall: ToolCall; result: { success: boolean; data?: string; error?: string } }> = [];
 
@@ -147,16 +152,20 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
     const allMessages = [...messages, ...toolMessages];
     setMessages(allMessages);
     setTasks(updatedTasks);
-    onSaveConversation(allMessages, updatedTasks);
+    await onSaveConversation(conversation, allMessages, updatedTasks);
 
     setTimeout(() => {
       setExecutingToolCalls([]);
     }, 2000);
 
-    await continueConversation(allMessages, updatedTasks);
+    await continueConversation(conversation, allMessages, updatedTasks);
   };
 
-  const continueConversation = async (currentMessages: Message[], currentTasks: Task[]) => {
+  const continueConversation = async (
+    activeConversation: Conversation,
+    currentMessages: Message[],
+    currentTasks: Task[]
+  ) => {
     if (!config.base_url) {
       setErrorMessage("请先在设置页面配置 API 地址");
       setIsLoading(false);
@@ -215,7 +224,7 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
 
       const messagesWithResponse = [...currentMessages, assistantMessage];
       setMessages(messagesWithResponse);
-      onSaveConversation(messagesWithResponse, currentTasks);
+      await onSaveConversation(activeConversation, messagesWithResponse, currentTasks);
 
       for (const toolCall of response.tool_calls) {
         const taskRequest = parseToolCallToTaskRequest(toolCall);
@@ -244,7 +253,7 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
         };
         const messagesWithResponse = [...currentMessages, assistantMessage];
         setMessages(messagesWithResponse);
-        onSaveConversation(messagesWithResponse, currentTasks);
+        await onSaveConversation(activeConversation, messagesWithResponse, currentTasks);
       }
       setIsLoading(false);
     }
@@ -255,7 +264,7 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
   };
 
   const handleSendMessage = async () => {
-    if (!inputText.trim() || isLoading || !conversation) return;
+    if (!inputText.trim() || isLoading) return;
 
     setErrorMessage(null);
 
@@ -271,16 +280,18 @@ function ChatArea({ conversation, onSaveConversation }: ChatAreaProps) {
       timestamp: new Date()
     };
 
+    const activeConversation = conversation ?? onCreateConversation();
     const currentMessages = [...messages, userMessage];
     setMessages(currentMessages);
     setInputText("");
     setIsLoading(true);
+    await onSaveConversation(activeConversation, currentMessages, tasks);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
 
-    await continueConversation(currentMessages, tasks);
+    await continueConversation(activeConversation, currentMessages, tasks);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

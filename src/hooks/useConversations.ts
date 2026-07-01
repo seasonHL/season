@@ -5,7 +5,7 @@ import { Conversation, Message, Task } from "../types";
 export function useConversations() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // 加载所有对话
   const loadConversations = async () => {
@@ -38,9 +38,9 @@ export function useConversations() {
   };
 
   // 创建新对话
-  const createConversation = async (): Promise<Conversation> => {
+  const createConversation = (): Conversation => {
     const now = new Date();
-    const conv: Conversation = {
+    return {
       id: crypto.randomUUID(),
       title: "新对话",
       messages: [],
@@ -48,26 +48,10 @@ export function useConversations() {
       created_at: now,
       updated_at: now,
     };
-    setCurrentConversation(conv);
-    
-    // 立即持久化到 store
-    const serialized = {
-      ...conv,
-      created_at: conv.created_at.toISOString(),
-      updated_at: conv.updated_at.toISOString(),
-      messages: [],
-      tasks: [],
-    };
-    
-    try {
-      await invoke("save_conversation", { conversation: serialized });
-      // 更新对话列表
-      setConversations((prev) => [conv, ...prev]);
-    } catch (error) {
-      console.error("Failed to save new conversation:", error);
-    }
-    
-    return conv;
+  };
+
+  const clearCurrentConversation = () => {
+    setCurrentConversation(null);
   };
 
   // 选择对话
@@ -157,10 +141,27 @@ export function useConversations() {
   const deleteConversation = async (id: string) => {
     try {
       await invoke("delete_conversation", { id });
+      const loadedConversations = await invoke<Conversation[]>("load_conversations");
+      const processed = loadedConversations.map((conv) => ({
+        ...conv,
+        created_at: new Date(conv.created_at),
+        updated_at: new Date(conv.updated_at),
+        messages: conv.messages.map((msg) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+        })),
+        tasks: conv.tasks.map((task) => ({
+          ...task,
+          created_at: new Date(task.created_at),
+          updated_at: new Date(task.updated_at),
+        })),
+      }));
+      processed.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
+      setConversations(processed);
+
       if (currentConversation?.id === id) {
         setCurrentConversation(null);
       }
-      await loadConversations();
     } catch (error) {
       console.error("Failed to delete conversation:", error);
     }
@@ -177,6 +178,7 @@ export function useConversations() {
     loading,
     loadConversations,
     createConversation,
+    clearCurrentConversation,
     selectConversation,
     saveConversation,
     deleteConversation,
