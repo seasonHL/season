@@ -38,10 +38,16 @@ function MessageMarkdown({
   role,
 }: {
   content: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
 }) {
   return (
-    <div className={`markdown-message ${role === "user" ? "markdown-message-user" : "markdown-message-assistant"}`}>
+    <div className={`markdown-message ${
+      role === "user"
+        ? "markdown-message-user"
+        : role === "tool"
+          ? "markdown-message-tool"
+          : "markdown-message-assistant"
+    }`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
@@ -344,9 +350,9 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-semibold text-[#2f6f8f]">工具执行结果</span>
                     </div>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap font-mono bg-[#f4f8f7] rounded-lg p-3 max-h-60 overflow-y-auto border border-[#e1ece9]">
-                      {message.content}
-                    </p>
+                    <div className="bg-[#f4f8f7] rounded-lg p-3 max-h-60 overflow-y-auto border border-[#e1ece9]">
+                      <MessageMarkdown content={message.content} role="tool" />
+                    </div>
                   </div>
                   <span className="text-xs text-[#8b9895] px-1.5 mt-2 block">
                     {formatTime(message.timestamp)}
@@ -426,9 +432,9 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
                       {tc.result.success ? "✅ 执行成功" : "❌ 执行失败"}
                     </p>
                     {tc.result.data && (
-                      <pre className="mt-2 text-xs text-[#53635f] font-mono bg-[#f4f8f7] rounded-lg p-3 max-h-40 overflow-y-auto border border-[#e1ece9]">
-                        {tc.result.data}
-                      </pre>
+                      <div className="mt-2 bg-[#f4f8f7] rounded-lg p-3 max-h-40 overflow-y-auto border border-[#e1ece9]">
+                        <MessageMarkdown content={tc.result.data} role="tool" />
+                      </div>
                     )}
                     {tc.result.error && (
                       <p className="mt-2 text-xs text-[#b33b32]">{tc.result.error}</p>
