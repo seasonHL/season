@@ -2,12 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Message, TaskRequest, Task, TaskStatus, Conversation, ToolCall } from "../types";
 import { useConfigContext } from "../contexts/ConfigContext";
 import { useTaskExecutor } from "../hooks/useTaskExecutor";
-import { 
-  sendChatMessage, 
-  parseToolCallToTaskRequest, 
-  convertToolsToOpenAIFormat, 
-  SYSTEM_PROMPT
-} from "../services/api";
+import { Agent } from "@season/agent-core";
+import { convertToolsToOpenAIFormat, parseToolCallToTaskRequest, SYSTEM_PROMPT } from "../services/api";
+import { ApiChatProvider } from "../services/agentProvider";
 import TaskConfirmation from "./TaskConfirmation";
 
 interface ChatAreaProps {
@@ -118,13 +115,9 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
       }
     }
 
-    const toolMessages: Message[] = toolResults.map(({ toolCall, result }) => ({
-      id: crypto.randomUUID(),
-      role: "tool" as const,
-      content: result.success ? result.data || "操作成功完成" : `错误: ${result.error || "未知错误"}`,
-      timestamp: new Date(),
-      tool_call_id: toolCall.id
-    }));
+    const toolMessages = toolResults.map(({ toolCall, result }) =>
+      Agent.createToolMessage(toolCall, result)
+    ) as Message[];
 
     const completedNewTasks = newTasks.map((task, idx) => ({
       ...task,
@@ -163,87 +156,36 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
 
     setIsLoading(true);
 
-    const chatMessages = [
-      { role: "system" as const, content: SYSTEM_PROMPT },
-      ...currentMessages.map((m) => {
-        const msg: Record<string, any> = {
-          role: m.role,
-        };
-        if (m.role === "assistant" && m.tool_calls) {
-          msg.content = m.content || null;
-          msg.tool_calls = m.tool_calls;
-        } else {
-          msg.content = m.content;
-        }
-        if (m.role === "tool" && m.tool_call_id) {
-          msg.tool_call_id = m.tool_call_id;
-        }
-        if (m.role === "assistant" && m.reasoning_content) {
-          msg.reasoning_content = m.reasoning_content;
-        }
-        return msg;
-      })
-    ].filter(m => m.content || m.tool_calls || m.tool_call_id || m.reasoning_content);
-
-    const tools = convertToolsToOpenAIFormat();
-
-    const response = await sendChatMessage(config.base_url, config.api_key, {
+    const agent = new Agent<TaskRequest>({
       model: config.model,
-      messages: chatMessages as any,
-      tools,
-      stream: false
+      provider: new ApiChatProvider(config),
+      systemPrompt: SYSTEM_PROMPT,
+      tools: convertToolsToOpenAIFormat(),
+      initialMessages: currentMessages,
+      parseToolCall: parseToolCallToTaskRequest,
+    });
+    const result = await agent.run().catch((error) => {
+      setErrorMessage(`请求失败: ${error instanceof Error ? error.message : "未知错误"}`);
+      setIsLoading(false);
+      return null;
     });
 
-    if (response.error) {
-      setErrorMessage(`请求失败: ${response.error}`);
-      setIsLoading(false);
-      return;
-    }
+    if (!result) return;
 
-    if (response.tool_calls && response.tool_calls.length > 0) {
-      const newToolCalls: ToolCallItem[] = [];
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: response.content || "正在执行工具...",
-        timestamp: new Date(),
-        tool_calls: response.tool_calls,
-        reasoning_content: response.reasoning_content
-      };
-
-      const messagesWithResponse = [...currentMessages, assistantMessage];
+    if (result.assistantMessage) {
+      const messagesWithResponse = [...currentMessages, result.assistantMessage];
       setMessages(messagesWithResponse);
       await onSaveConversation(activeConversation, messagesWithResponse, currentTasks);
+      currentMessages = messagesWithResponse;
+    }
 
-      for (const toolCall of response.tool_calls) {
-        const taskRequest = parseToolCallToTaskRequest(toolCall);
-        if (taskRequest) {
-          newToolCalls.push({
-            toolCall,
-            taskRequest,
-            status: "pending"
-          });
-        }
-      }
-
-      if (newToolCalls.length > 0) {
-        setPendingToolCalls(newToolCalls);
-      }
-
+    if (result.toolCalls.length > 0) {
+      setPendingToolCalls(result.toolCalls.map((item) => ({
+        ...item,
+        status: "pending" as const
+      })));
       setIsLoading(false);
     } else {
-      if (response.content) {
-        const assistantMessage: Message = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: response.content,
-          timestamp: new Date(),
-          reasoning_content: response.reasoning_content
-        };
-        const messagesWithResponse = [...currentMessages, assistantMessage];
-        setMessages(messagesWithResponse);
-        await onSaveConversation(activeConversation, messagesWithResponse, currentTasks);
-      }
       setIsLoading(false);
     }
   };
@@ -262,15 +204,17 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
       return;
     }
 
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: inputText.trim(),
-      timestamp: new Date()
-    };
-
+    const agent = new Agent<TaskRequest>({
+      model: config.model,
+      provider: new ApiChatProvider(config),
+      systemPrompt: SYSTEM_PROMPT,
+      tools: convertToolsToOpenAIFormat(),
+      initialMessages: messages,
+      parseToolCall: parseToolCallToTaskRequest,
+    });
+    agent.appendUserMessage(inputText.trim());
     const activeConversation = conversation ?? onCreateConversation();
-    const currentMessages = [...messages, userMessage];
+    const currentMessages = agent.messages;
     setMessages(currentMessages);
     setInputText("");
     setIsLoading(true);

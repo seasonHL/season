@@ -5,12 +5,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "pnpm --filter @season/agent-core build && vite",
+    "build": "pnpm --filter @season/agent-core build && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },
   "dependencies": {
+    "@season/agent-core": "workspace:*",
     "@sinclair/typebox": "^0.34.49",
     "@tailwindcss/postcss": "^4.3.0",
     "@tauri-apps/api": "^2",
