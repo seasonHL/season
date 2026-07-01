@@ -30,11 +30,28 @@ pub struct TaskResult {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ToolFunction {
+    pub name: String,
+    pub arguments: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub function: ToolFunction,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
     pub id: String,
     pub role: String,
     pub content: String,
     pub timestamp: String,
+    pub tool_calls: Option<Vec<ToolCall>>,
+    pub tool_call_id: Option<String>,
+    pub reasoning_content: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
