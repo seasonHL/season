@@ -75,7 +75,7 @@ function App() {
   }, [savePendingChanges]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[#f7faf9] text-[#18201e]">
       <Sidebar
         onViewChange={handleViewChange}
         conversations={conversations}

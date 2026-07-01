@@ -29,6 +29,7 @@ Desktop Agent 是一个功能强大的桌面助手应用，结合了 AI 聊天�
 ### 环境要求
 
 - Node.js (推荐使用最新 LTS 版本)
+- pnpm
 - Rust (用于 Tauri 编译)
 - 操作系统: macOS, Windows, Linux
 
@@ -37,39 +38,39 @@ Desktop Agent 是一个功能强大的桌面助手应用，结合了 AI 聊天�
 1. 克隆项目
 ```bash
 git clone <repository-url>
-cd desktop-agent-tauri
+cd season
 ```
 
 2. 安装依赖
 ```bash
-npm install
+pnpm install
 ```
 
 ### 开发模式运行
 
-启动开发服务器:
+启动 Tauri 桌面应用:
 ```bash
-npm run tauri dev
+pnpm tauri dev
 ```
 
-这将同时启动前端开发服务器和 Tauri 应用。
+这将同时启动 Vite 前端开发服务器和 Tauri 应用。前端开发服务器默认运行在 `http://localhost:1420/`。
 
 ### 前端开发
 如果只运行前端:
 ```bash
-npm run dev
+pnpm dev
 ```
 
 ### 构建应用
 
 构建前端:
 ```bash
-npm run build
+pnpm build
 ```
 
 打包桌面应用:
 ```bash
-npm run tauri build
+pnpm tauri build
 ```
 
 ## 配置说明
@@ -90,7 +91,7 @@ npm run tauri build
 ## 项目结构
 
 ```
-desktop-agent-tauri/
+season/
 ├── src/                  # 前端源代码
 │   ├── components/      # React 组件
 │   ├── hooks/        # React hooks
@@ -102,6 +103,7 @@ desktop-agent-tauri/
 │   ├── src/         # Rust 源代码
 │   └── tauri.conf.json
 ├── package.json
+├── pnpm-lock.yaml
 └── vite.config.ts
 ```
 
