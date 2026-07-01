@@ -13,6 +13,8 @@ export type {
   AgentProvider,
   AgentProviderRequest,
   AgentProviderResponse,
+  AgentProviderStreamChunk,
+  AgentStreamUpdate,
   AgentToolCall,
   AgentToolCallRequest,
   AgentToolDefinition,

@@ -83,6 +83,11 @@ export interface AgentProviderResponse {
   reasoning_content?: string;
 }
 
+export interface AgentProviderStreamChunk {
+  content_delta?: string;
+  reasoning_content_delta?: string;
+}
+
 /**
  * 模型服务适配器。
  *
@@ -91,6 +96,14 @@ export interface AgentProviderResponse {
 export interface AgentProvider {
   name: string;
   complete(request: AgentProviderRequest): Promise<AgentProviderResponse>;
+  stream?(
+    request: AgentProviderRequest,
+    onChunk: (chunk: AgentProviderStreamChunk) => void
+  ): Promise<AgentProviderResponse>;
+}
+
+export interface AgentStreamUpdate {
+  message: AgentMessage;
 }
 
 /**

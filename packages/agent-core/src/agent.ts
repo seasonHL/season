@@ -8,9 +8,11 @@ import type {
   AgentMessage,
   AgentOptions,
   AgentProvider,
+  AgentProviderRequest,
   AgentToolCall,
   AgentToolDefinition,
   AgentToolResult,
+  AgentStreamUpdate,
   AgentTurnResult,
 } from "./types";
 
@@ -97,6 +99,16 @@ export class Agent<TTaskRequest = unknown> {
     return this.nextTurn();
   }
 
+  async runStream(
+    onUpdate: (update: AgentStreamUpdate) => void,
+    userInput?: string
+  ): Promise<AgentTurnResult<TTaskRequest>> {
+    if (userInput !== undefined) {
+      this.appendUserMessage(userInput);
+    }
+    return this.nextTurnStream(onUpdate);
+  }
+
   async continue(messages: AgentMessage[]): Promise<AgentTurnResult<TTaskRequest>> {
     this.setMessages(messages);
     return this.nextTurn();
@@ -177,6 +189,72 @@ export class Agent<TTaskRequest = unknown> {
       toolCalls,
       messages: this.messages,
       answer: toolCalls.length === 0 ? assistantMessage.content.trim() : undefined,
+    };
+  }
+
+  private async nextTurnStream(
+    onUpdate: (update: AgentStreamUpdate) => void
+  ): Promise<AgentTurnResult<TTaskRequest>> {
+    if (!this.provider.stream) {
+      return this.nextTurn();
+    }
+
+    if (this.iterations >= this.maxIterations) {
+      throw new Error(`Agent exceeded ${this.maxIterations} iterations`);
+    }
+    this.iterations += 1;
+
+    const request = this.createProviderRequest(true);
+    const assistantMessage: AgentMessage = {
+      id: this.createId(),
+      role: "assistant",
+      content: "",
+      timestamp: new Date(),
+    };
+    this.history = [...this.history, assistantMessage];
+
+    const response = await this.provider.stream(request, (chunk) => {
+      if (chunk.content_delta) {
+        assistantMessage.content += chunk.content_delta;
+      }
+
+      if (chunk.reasoning_content_delta) {
+        assistantMessage.reasoning_content = `${assistantMessage.reasoning_content || ""}${chunk.reasoning_content_delta}`;
+      }
+
+      onUpdate({ message: { ...assistantMessage } });
+    });
+
+    const toolCalls = (response.tool_calls || []).flatMap((toolCall) => {
+      const taskRequest = this.parseToolCall?.(toolCall);
+      return taskRequest ? [{ toolCall, taskRequest }] : [];
+    });
+
+    assistantMessage.content = response.content || (toolCalls.length > 0 ? "正在执行工具..." : "");
+    assistantMessage.tool_calls = response.tool_calls;
+    assistantMessage.reasoning_content = response.reasoning_content;
+
+    if (!assistantMessage.content && toolCalls.length === 0) {
+      this.history = this.history.filter((message) => message.id !== assistantMessage.id);
+      return { toolCalls, messages: this.messages };
+    }
+
+    onUpdate({ message: { ...assistantMessage } });
+
+    return {
+      assistantMessage,
+      toolCalls,
+      messages: this.messages,
+      answer: toolCalls.length === 0 ? assistantMessage.content.trim() : undefined,
+    };
+  }
+
+  private createProviderRequest(stream: boolean): AgentProviderRequest {
+    return {
+      model: this.model,
+      messages: toChatMessages(this.systemPrompt, this.history),
+      tools: this.tools,
+      stream,
     };
   }
 }

@@ -94,6 +94,15 @@ function ToolCallDetails({ toolCall }: { toolCall: ToolCall }) {
   );
 }
 
+function upsertMessage(messages: Message[], message: Message) {
+  const existingIndex = messages.findIndex((item) => item.id === message.id);
+  if (existingIndex === -1) {
+    return [...messages, message];
+  }
+
+  return messages.map((item, index) => index === existingIndex ? message : item);
+}
+
 function ChatArea({ conversation, onCreateConversation, onSaveConversation }: ChatAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -102,6 +111,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingToolCalls, setPendingToolCalls] = useState<ToolCallItem[]>([]);
   const [executingToolCalls, setExecutingToolCalls] = useState<ToolCallItem[]>([]);
+  const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { config } = useConfigContext();
@@ -115,6 +125,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     setErrorMessage(null);
     setPendingToolCalls([]);
     setExecutingToolCalls([]);
+    setStreamingAssistantId(null);
   }, [conversation?.id]);
 
   const scrollToBottom = () => {
@@ -202,10 +213,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     setMessages(allMessages);
     setTasks(updatedTasks);
     await onSaveConversation(conversation, allMessages, updatedTasks);
-
-    setTimeout(() => {
-      setExecutingToolCalls([]);
-    }, 2000);
+    setExecutingToolCalls([]);
 
     const latestMemory = await loadMemory();
     await continueConversation(conversation, allMessages, updatedTasks, latestMemory);
@@ -224,6 +232,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     }
 
     setIsLoading(true);
+    setStreamingAssistantId(null);
 
     const agent = new Agent<TaskRequest>({
       model: config.model,
@@ -233,16 +242,25 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
       initialMessages: currentMessages,
       parseToolCall: parseToolCallToTaskRequest,
     });
-    const result = await agent.run().catch((error) => {
+    const result = await agent.runStream(({ message }) => {
+      if (!message.content && !message.reasoning_content && !message.tool_calls?.length) {
+        return;
+      }
+
+      const nextMessages = upsertMessage(currentMessages, message as Message);
+      setStreamingAssistantId(message.id);
+      setMessages(nextMessages);
+    }).catch((error) => {
       setErrorMessage(`请求失败: ${error instanceof Error ? error.message : "未知错误"}`);
       setIsLoading(false);
+      setStreamingAssistantId(null);
       return null;
     });
 
     if (!result) return;
 
     if (result.assistantMessage) {
-      const messagesWithResponse = [...currentMessages, result.assistantMessage];
+      const messagesWithResponse = upsertMessage(currentMessages, result.assistantMessage as Message);
       setMessages(messagesWithResponse);
       await onSaveConversation(activeConversation, messagesWithResponse, currentTasks);
       currentMessages = messagesWithResponse;
@@ -254,8 +272,10 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
         status: "pending" as const
       })));
       setIsLoading(false);
+      setStreamingAssistantId(null);
     } else {
       setIsLoading(false);
+      setStreamingAssistantId(null);
     }
   };
 
@@ -481,7 +501,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
           </div>
         ))}
 
-        {isLoading && (
+        {isLoading && !streamingAssistantId && (
           <div className="flex gap-4 justify-start animate-slide-up">
             <div className="w-10 h-10 rounded-lg bg-[#167a69] flex items-center justify-center flex-shrink-0 shadow-[0_10px_22px_rgba(22,122,105,0.18)]">
               <svg className="w-5.5 h-5.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
