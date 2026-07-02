@@ -1,5 +1,7 @@
 export { Agent } from "./agent";
+export { runAgentLoop } from "./loop";
 export { ToolRegistry } from "./tools";
+export type { AgentLoopRuntime } from "./loop";
 export {
   createAssistantMessage,
   createToolMessage,

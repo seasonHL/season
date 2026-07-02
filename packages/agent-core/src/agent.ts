@@ -4,6 +4,7 @@ import {
   defaultCreateId,
   toChatMessages,
 } from "./messages";
+import { runAgentLoop } from "./loop";
 import { AgentSafetyGuard } from "./safety";
 import { ToolRegistry } from "./tools";
 import type {
@@ -16,7 +17,6 @@ import type {
   AgentToolResult,
   AgentRunWithToolsOptions,
   AgentStreamUpdate,
-  AgentToolRunResult,
   AgentTurnResult,
 } from "./types";
 
@@ -122,121 +122,7 @@ export class Agent<TTaskRequest = unknown, TContext = unknown> {
   async runWithToolsStream(
     options: AgentRunWithToolsOptions<TTaskRequest, TContext>
   ): Promise<AgentTurnResult<TTaskRequest>> {
-    if (options.userInput !== undefined) {
-      this.appendUserMessage(options.userInput);
-    }
-
-    let result: AgentTurnResult<TTaskRequest> = {
-      toolCalls: [],
-      messages: this.messages,
-    };
-    let pendingBudgetNudgeMessage: AgentMessage | undefined;
-
-    while (this.iterations < this.maxIterations) {
-      result = options.stream === false
-        ? await this.nextTurn()
-        : await this.nextTurnStream(options.onStreamUpdate || (() => {}));
-
-      if (result.assistantMessage) {
-        await options.onAssistantMessage?.(result.assistantMessage, this.messages);
-      }
-
-      if (this.isMaxTokensFinish(result.finishReason)) {
-        const recoveryMessage = this.safetyGuard.createTruncationRecoveryMessage(this.createId);
-        if (!recoveryMessage) {
-          throw new Error("Agent stopped because model output was repeatedly truncated");
-        }
-        this.history = [...this.history, recoveryMessage];
-        continue;
-      }
-
-      if (result.assistantMessage) {
-        const budgetStatus = this.safetyGuard.checkTokenBudget(
-          result.outputTokens,
-          `${result.assistantMessage.content}${result.assistantMessage.reasoning_content || ""}`
-        );
-
-        if (budgetStatus.status === "stop") {
-          throw new Error(budgetStatus.message || "Agent stopped because output budget had diminishing returns");
-        }
-
-        if (budgetStatus.status === "nudge" && budgetStatus.message) {
-          pendingBudgetNudgeMessage = this.safetyGuard.createBudgetNudgeMessage(budgetStatus.message, this.createId);
-        }
-      }
-
-      if (result.toolCalls.length === 0) {
-        if (pendingBudgetNudgeMessage) {
-          this.history = [...this.history, pendingBudgetNudgeMessage];
-          pendingBudgetNudgeMessage = undefined;
-        }
-        return result;
-      }
-
-      const needsApproval = result.toolCalls.some((item) =>
-        this.toolRegistry.requiresApproval(item, options.context)
-      );
-      if (needsApproval) {
-        const approved = await options.requestApproval?.(result.toolCalls);
-        if (!approved) {
-          const rejectedResults = result.toolCalls.map((item) => ({
-            ...item,
-            result: {
-              success: false,
-              error: "用户拒绝执行该操作",
-            },
-          }));
-          this.appendToolResults(rejectedResults);
-          await options.onToolCallsFinished?.(rejectedResults, this.messages);
-          continue;
-        }
-      }
-
-      await options.onToolCallsStarted?.(result.toolCalls);
-      const toolResults: AgentToolRunResult<TTaskRequest>[] = [];
-      const postToolMessages: AgentMessage[] = [];
-      let loopBreakMessage: string | undefined;
-
-      for (let i = 0; i < result.toolCalls.length; i++) {
-        const item = result.toolCalls[i];
-        const toolResult = await this.toolRegistry.execute(item, options.context);
-        const loopStatus = this.safetyGuard.checkToolResult(item.toolCall, toolResult);
-        const finalToolResult = loopStatus.status === "critical"
-          ? {
-              success: false,
-              error: `Tool loop blocked: ${loopStatus.message}`,
-            }
-          : toolResult;
-
-        toolResults.push({ ...item, result: finalToolResult });
-        await options.onToolCallFinished?.(item, finalToolResult, i);
-
-        if (loopStatus.status === "warn" && loopStatus.message) {
-          postToolMessages.push(this.safetyGuard.createLoopWarningMessage(loopStatus.message, this.createId));
-        }
-
-        if (loopStatus.status === "break") {
-          loopBreakMessage = loopStatus.message || "Agent stopped because tools made no progress";
-          break;
-        }
-      }
-
-      this.appendToolResults(toolResults);
-      if (pendingBudgetNudgeMessage) {
-        postToolMessages.push(pendingBudgetNudgeMessage);
-        pendingBudgetNudgeMessage = undefined;
-      }
-      if (postToolMessages.length > 0) {
-        this.history = [...this.history, ...postToolMessages];
-      }
-      await options.onToolCallsFinished?.(toolResults, this.messages);
-
-      if (loopBreakMessage) {
-        throw new Error(loopBreakMessage);
-      }
-    }
-
-    throw new Error(`Agent exceeded ${this.maxIterations} iterations`);
+    return runAgentLoop(this.createLoopRuntime(), options);
   }
 
   async continue(messages: AgentMessage[]): Promise<AgentTurnResult<TTaskRequest>> {
@@ -396,7 +282,22 @@ export class Agent<TTaskRequest = unknown, TContext = unknown> {
     });
   }
 
-  private isMaxTokensFinish(finishReason?: string) {
-    return finishReason === "max_tokens" || finishReason === "length";
+  private createLoopRuntime() {
+    return {
+      getIterations: () => this.iterations,
+      getMaxIterations: () => this.maxIterations,
+      getMessages: () => this.messages,
+      appendUserMessage: (content: string) => this.appendUserMessage(content),
+      appendToolResults: (results: Array<{ toolCall: AgentToolCall; result: AgentToolResult }>) =>
+        this.appendToolResults(results),
+      appendMessages: (messages: AgentMessage[]) => {
+        this.history = [...this.history, ...messages];
+      },
+      nextTurn: (stream: boolean, onStreamUpdate?: (update: AgentStreamUpdate) => void) =>
+        stream ? this.nextTurnStream(onStreamUpdate || (() => {})) : this.nextTurn(),
+      createId: this.createId,
+      toolRegistry: this.toolRegistry,
+      safetyGuard: this.safetyGuard,
+    };
   }
 }
