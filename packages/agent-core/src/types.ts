@@ -114,6 +114,46 @@ export interface AgentToolCallRequest<TTaskRequest> {
   taskRequest: TTaskRequest;
 }
 
+export interface AgentToolRuntime<TTaskRequest = unknown, TContext = unknown> {
+  name: string;
+  definition: AgentToolDefinition;
+  parse: (args: unknown, toolCall: AgentToolCall) => TTaskRequest | null;
+  requiresApproval?: (request: TTaskRequest, toolCall: AgentToolCall, context: TContext) => boolean;
+  execute: (
+    request: TTaskRequest,
+    toolCall: AgentToolCall,
+    context: TContext
+  ) => Promise<AgentToolResult>;
+}
+
+export interface AgentToolRunItem<TTaskRequest = unknown> {
+  toolCall: AgentToolCall;
+  taskRequest: TTaskRequest;
+}
+
+export interface AgentToolRunResult<TTaskRequest = unknown> extends AgentToolRunItem<TTaskRequest> {
+  result: AgentToolResult;
+}
+
+export interface AgentRunWithToolsOptions<TTaskRequest = unknown, TContext = unknown> {
+  userInput?: string;
+  context: TContext;
+  stream?: boolean;
+  onStreamUpdate?: (update: AgentStreamUpdate) => void;
+  requestApproval?: (toolCalls: AgentToolRunItem<TTaskRequest>[]) => Promise<boolean>;
+  onAssistantMessage?: (message: AgentMessage, messages: AgentMessage[]) => void | Promise<void>;
+  onToolCallsStarted?: (toolCalls: AgentToolRunItem<TTaskRequest>[]) => void | Promise<void>;
+  onToolCallFinished?: (
+    item: AgentToolRunItem<TTaskRequest>,
+    result: AgentToolResult,
+    index: number
+  ) => void | Promise<void>;
+  onToolCallsFinished?: (
+    results: AgentToolRunResult<TTaskRequest>[],
+    messages: AgentMessage[]
+  ) => void | Promise<void>;
+}
+
 /**
  * 单轮 Agent 执行结果。
  */
@@ -130,11 +170,12 @@ export interface AgentTurnResult<TTaskRequest> {
  * TTaskRequest 允许上层应用把通用函数调用映射成自己的可执行任务格式，
  * 避免 agent-core 依赖桌面端的具体动作类型。
  */
-export interface AgentOptions<TTaskRequest> {
+export interface AgentOptions<TTaskRequest, TContext = unknown> {
   model: string;
   provider: AgentProvider;
   systemPrompt: string;
   tools?: AgentToolDefinition[];
+  toolRuntimes?: AgentToolRuntime<TTaskRequest, TContext>[];
   initialMessages?: AgentMessage[];
   maxIterations?: number;
   parseToolCall?: (toolCall: AgentToolCall) => TTaskRequest | null;

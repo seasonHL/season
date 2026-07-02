@@ -1,4 +1,5 @@
 export { Agent } from "./agent";
+export { ToolRegistry } from "./tools";
 export {
   createAssistantMessage,
   createToolMessage,
@@ -14,10 +15,14 @@ export type {
   AgentProviderRequest,
   AgentProviderResponse,
   AgentProviderStreamChunk,
+  AgentRunWithToolsOptions,
   AgentStreamUpdate,
   AgentToolCall,
   AgentToolCallRequest,
   AgentToolDefinition,
+  AgentToolRuntime,
+  AgentToolRunItem,
+  AgentToolRunResult,
   AgentToolResult,
   AgentTurnResult,
 } from "./types";

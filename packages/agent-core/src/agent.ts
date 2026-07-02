@@ -4,6 +4,7 @@ import {
   defaultCreateId,
   toChatMessages,
 } from "./messages";
+import { ToolRegistry } from "./tools";
 import type {
   AgentMessage,
   AgentOptions,
@@ -12,7 +13,9 @@ import type {
   AgentToolCall,
   AgentToolDefinition,
   AgentToolResult,
+  AgentRunWithToolsOptions,
   AgentStreamUpdate,
+  AgentToolRunResult,
   AgentTurnResult,
 } from "./types";
 
@@ -22,22 +25,24 @@ import type {
  * 负责维护消息历史、调用模型 Provider，并把模型返回的工具调用转换成应用层任务。
  * TTaskRequest 由上层应用定义，agent-core 不关心具体任务如何执行。
  */
-export class Agent<TTaskRequest = unknown> {
+export class Agent<TTaskRequest = unknown, TContext = unknown> {
   private history: AgentMessage[];
   private iterations = 0;
   private readonly model: string;
   private readonly provider: AgentProvider;
   private readonly systemPrompt: string;
   private readonly tools: AgentToolDefinition[];
+  private readonly toolRegistry: ToolRegistry<TTaskRequest, TContext>;
   private readonly maxIterations: number;
   private readonly parseToolCall?: (toolCall: AgentToolCall) => TTaskRequest | null;
   private readonly createId: () => string;
 
-  constructor(options: AgentOptions<TTaskRequest>) {
+  constructor(options: AgentOptions<TTaskRequest, TContext>) {
     this.model = options.model;
     this.provider = options.provider;
     this.systemPrompt = options.systemPrompt;
-    this.tools = options.tools || [];
+    this.toolRegistry = new ToolRegistry<TTaskRequest, TContext>(options.toolRuntimes || []);
+    this.tools = options.tools || this.toolRegistry.definitions;
     this.history = [...(options.initialMessages || [])];
     this.maxIterations = options.maxIterations ?? 8;
     this.parseToolCall = options.parseToolCall;
@@ -110,6 +115,67 @@ export class Agent<TTaskRequest = unknown> {
     return this.nextTurnStream(onUpdate);
   }
 
+  async runWithToolsStream(
+    options: AgentRunWithToolsOptions<TTaskRequest, TContext>
+  ): Promise<AgentTurnResult<TTaskRequest>> {
+    if (options.userInput !== undefined) {
+      this.appendUserMessage(options.userInput);
+    }
+
+    let result: AgentTurnResult<TTaskRequest> = {
+      toolCalls: [],
+      messages: this.messages,
+    };
+
+    while (this.iterations < this.maxIterations) {
+      result = options.stream === false
+        ? await this.nextTurn()
+        : await this.nextTurnStream(options.onStreamUpdate || (() => {}));
+
+      if (result.assistantMessage) {
+        await options.onAssistantMessage?.(result.assistantMessage, this.messages);
+      }
+
+      if (result.toolCalls.length === 0) {
+        return result;
+      }
+
+      const needsApproval = result.toolCalls.some((item) =>
+        this.toolRegistry.requiresApproval(item, options.context)
+      );
+      if (needsApproval) {
+        const approved = await options.requestApproval?.(result.toolCalls);
+        if (!approved) {
+          const rejectedResults = result.toolCalls.map((item) => ({
+            ...item,
+            result: {
+              success: false,
+              error: "用户拒绝执行该操作",
+            },
+          }));
+          this.appendToolResults(rejectedResults);
+          await options.onToolCallsFinished?.(rejectedResults, this.messages);
+          continue;
+        }
+      }
+
+      await options.onToolCallsStarted?.(result.toolCalls);
+      const toolResults: AgentToolRunResult<TTaskRequest>[] = [];
+
+      for (let i = 0; i < result.toolCalls.length; i++) {
+        const item = result.toolCalls[i];
+        const toolResult = await this.toolRegistry.execute(item, options.context);
+        toolResults.push({ ...item, result: toolResult });
+        await options.onToolCallFinished?.(item, toolResult, i);
+      }
+
+      this.appendToolResults(toolResults);
+      await options.onToolCallsFinished?.(toolResults, this.messages);
+    }
+
+    throw new Error(`Agent exceeded ${this.maxIterations} iterations`);
+  }
+
   async continue(messages: AgentMessage[]): Promise<AgentTurnResult<TTaskRequest>> {
     this.setMessages(messages);
     return this.nextTurn();
@@ -166,10 +232,7 @@ export class Agent<TTaskRequest = unknown> {
     /**
      * 工具调用的解析留给上层应用处理，Provider 只负责返回模型原始意图。
      */
-    const toolCalls = (response.tool_calls || []).flatMap((toolCall) => {
-      const taskRequest = this.parseToolCall?.(toolCall);
-      return taskRequest ? [{ toolCall, taskRequest }] : [];
-    });
+    const toolCalls = this.resolveToolCalls(response.tool_calls || []);
 
     if (!response.content && toolCalls.length === 0) {
       return { toolCalls, messages: this.messages };
@@ -226,10 +289,7 @@ export class Agent<TTaskRequest = unknown> {
       onUpdate({ message: { ...assistantMessage } });
     });
 
-    const toolCalls = (response.tool_calls || []).flatMap((toolCall) => {
-      const taskRequest = this.parseToolCall?.(toolCall);
-      return taskRequest ? [{ toolCall, taskRequest }] : [];
-    });
+    const toolCalls = this.resolveToolCalls(response.tool_calls || []);
 
     assistantMessage.content = response.content || (toolCalls.length > 0 ? "正在执行工具..." : "");
     assistantMessage.tool_calls = response.tool_calls;
@@ -257,5 +317,15 @@ export class Agent<TTaskRequest = unknown> {
       tools: this.tools,
       stream,
     };
+  }
+
+  private resolveToolCalls(toolCalls: AgentToolCall[]) {
+    return toolCalls.flatMap((toolCall) => {
+      const taskRequest = this.parseToolCall?.(toolCall);
+      if (taskRequest) return [{ toolCall, taskRequest }];
+
+      const resolved = this.toolRegistry.resolve(toolCall);
+      return resolved ? [resolved] : [];
+    });
   }
 }

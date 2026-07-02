@@ -5,8 +5,8 @@ import { useConfigContext } from "../contexts/ConfigContext";
 import { useMemory } from "../hooks/useMemory";
 import { useTaskExecutor } from "../hooks/useTaskExecutor";
 import { ApiChatProvider } from "../services/agentProvider";
-import { parseToolCallToTaskRequest, toolDefinitions } from "../tools/registry";
-import { Conversation, Message, Task, TaskStatus, TaskRequest, ToolCall } from "../types";
+import { toolRuntimes } from "../tools/registry";
+import { Conversation, Message, Task, TaskStatus, TaskRequest } from "../types";
 import ChatComposer from "./chat/ChatComposer";
 import ChatHeader from "./chat/ChatHeader";
 import ChatMessageList from "./chat/ChatMessageList";
@@ -48,7 +48,8 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
   const [pendingToolCalls, setPendingToolCalls] = useState<ToolCallItem[]>([]);
   const [executingToolCalls, setExecutingToolCalls] = useState<ToolCallItem[]>([]);
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
-  const agentRef = useRef<Agent<TaskRequest> | null>(null);
+  const agentRef = useRef<Agent<TaskRequest, { executeTask: (action: TaskRequest["action"]) => Promise<ToolResult> }> | null>(null);
+  const approvalResolverRef = useRef<((approved: boolean) => void) | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { config } = useConfigContext();
@@ -56,13 +57,12 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
   const { memory, loadMemory } = useMemory();
 
   const createAgent = (initialMessages: Message[], memorySnapshot = memory) => {
-    return new Agent<TaskRequest>({
+    return new Agent<TaskRequest, { executeTask: (action: TaskRequest["action"]) => Promise<ToolResult> }>({
       model: config.model,
       provider: new ApiChatProvider(config),
       systemPrompt: buildSystemPrompt(memorySnapshot),
-      tools: toolDefinitions,
+      toolRuntimes,
       initialMessages,
-      parseToolCall: parseToolCallToTaskRequest,
     });
   };
 
@@ -112,8 +112,8 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
   /**
    * 在用户消息或工具结果之后继续模型回合。
    *
-   * 流式片段会就地更新正在生成的助手消息；完成后持久化最终消息，
-   * 如果模型返回工具调用，则进入用户确认流程。
+   * Agent runtime 负责模型 -> 工具 -> 工具结果 -> 模型的循环；
+   * 组件只处理流式展示、审批弹窗、任务状态和持久化。
    */
   const continueConversation = async (
     activeConversation: Conversation,
@@ -130,37 +130,96 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     setIsLoading(true);
     setStreamingAssistantId(null);
 
-    const result = await getSessionAgent(currentMessages, memorySnapshot).runStream(({ message }) => {
-      if (!message.content && !message.reasoning_content && !message.tool_calls?.length) {
-        return;
-      }
+    let workingMessages = currentMessages;
+    let workingTasks = currentTasks;
+    let activeBatchTasks: Task[] = [];
 
-      setStreamingAssistantId(message.id);
-      setMessages(upsertMessage(currentMessages, message as Message));
+    await getSessionAgent(currentMessages, memorySnapshot).runWithToolsStream({
+      context: { executeTask },
+      stream: true,
+      onStreamUpdate: ({ message }) => {
+        if (!message.content && !message.reasoning_content && !message.tool_calls?.length) {
+          return;
+        }
+
+        setStreamingAssistantId(message.id);
+        setMessages((prev) => upsertMessage(prev, message as Message));
+      },
+      onAssistantMessage: async (_message, nextMessages) => {
+        workingMessages = nextMessages as Message[];
+        setMessages(workingMessages);
+        await onSaveConversation(activeConversation, workingMessages, workingTasks);
+      },
+      requestApproval: async (toolCalls) => {
+        setPendingToolCalls(toolCalls.map((item) => ({
+          ...item,
+          status: "pending" as const
+        })));
+        setIsLoading(false);
+        setStreamingAssistantId(null);
+        return new Promise<boolean>((resolve) => {
+          approvalResolverRef.current = resolve;
+        });
+      },
+      onToolCallsStarted: async (toolCalls) => {
+        const now = new Date();
+        const executingToolCallItems = toolCalls.map((item) => ({
+          ...item,
+          status: "executing" as const
+        }));
+
+        activeBatchTasks = executingToolCallItems.map((item) => ({
+          id: crypto.randomUUID(),
+          task_request: item.taskRequest,
+          status: TaskStatus.EXECUTING,
+          created_at: now,
+          updated_at: now
+        }));
+
+        workingTasks = [...workingTasks, ...activeBatchTasks];
+        setPendingToolCalls([]);
+        setExecutingToolCalls(executingToolCallItems);
+        setTasks(workingTasks);
+        setIsLoading(false);
+        setStreamingAssistantId(null);
+        await onSaveConversation(activeConversation, workingMessages, workingTasks);
+      },
+      onToolCallFinished: async (_item, result, index) => {
+        setExecutingToolCalls((prev) =>
+          prev.map((current, currentIndex) =>
+            currentIndex === index
+              ? { ...current, result, status: result.success ? "completed" : "failed" }
+              : current
+          )
+        );
+      },
+      onToolCallsFinished: async (results, nextMessages) => {
+        const completedTasks = activeBatchTasks.map((task, index) => ({
+          ...task,
+          status: results[index]?.result.success ? TaskStatus.COMPLETED : TaskStatus.FAILED,
+          result: results[index]?.result,
+          updated_at: new Date()
+        }));
+
+        if (completedTasks.length > 0) {
+          const completedById = new Map(completedTasks.map((task) => [task.id, task]));
+          workingTasks = workingTasks.map((task) => completedById.get(task.id) || task);
+          setTasks(workingTasks);
+        }
+
+        workingMessages = nextMessages as Message[];
+        setMessages(workingMessages);
+        setExecutingToolCalls([]);
+        await onSaveConversation(activeConversation, workingMessages, workingTasks);
+        activeBatchTasks = [];
+      },
     }).catch((error) => {
       setErrorMessage(`请求失败: ${error instanceof Error ? error.message : "未知错误"}`);
+    }).finally(async () => {
       setIsLoading(false);
       setStreamingAssistantId(null);
-      return null;
+      await loadMemory();
     });
-
-    if (!result) return;
-
-    if (result.assistantMessage) {
-      currentMessages = upsertMessage(currentMessages, result.assistantMessage as Message);
-      setMessages(currentMessages);
-      await onSaveConversation(activeConversation, currentMessages, currentTasks);
-    }
-
-    if (result.toolCalls.length > 0) {
-      setPendingToolCalls(result.toolCalls.map((item) => ({
-        ...item,
-        status: "pending" as const
-      })));
-    }
-
-    setIsLoading(false);
-    setStreamingAssistantId(null);
   };
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -169,90 +228,22 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
   };
 
-  /**
-   * 顺序执行已确认的工具调用，并把每次执行结果同步到执行中 UI。
-   */
-  const executeToolCalls = async (toolCalls: ToolCallItem[]) => {
-    const toolResults: Array<{ toolCall: ToolCall; result: ToolResult }> = [];
-
-    for (let i = 0; i < toolCalls.length; i++) {
-      const item = toolCalls[i];
-
-      try {
-        const result = await executeTask(item.taskRequest.action);
-        toolResults.push({ toolCall: item.toolCall, result });
-
-        setExecutingToolCalls((prev) =>
-          prev.map((current, index) =>
-            index === i ? { ...current, result, status: result.success ? "completed" : "failed" } : current
-          )
-        );
-      } catch (error) {
-        const result = {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error"
-        };
-        toolResults.push({ toolCall: item.toolCall, result });
-
-        setExecutingToolCalls((prev) =>
-          prev.map((current, index) =>
-            index === i ? { ...current, result, status: "failed" } : current
-          )
-        );
-      }
-    }
-
-    return toolResults;
-  };
-
-  /**
-   * 将待确认工具调用转换为任务并执行，写入工具结果消息后继续模型对话。
-   */
   const handleConfirmToolCalls = async () => {
-    if (pendingToolCalls.length === 0 || !conversation) return;
+    if (pendingToolCalls.length === 0) return;
 
-    const now = new Date();
-    const toolCallsToRun: ToolCallItem[] = pendingToolCalls.map((item) => ({
-      ...item,
-      status: "executing"
-    }));
-    const newTasks: Task[] = toolCallsToRun.map((item) => ({
-      id: crypto.randomUUID(),
-      task_request: item.taskRequest,
-      status: TaskStatus.EXECUTING,
-      created_at: now,
-      updated_at: now
-    }));
-
-    setExecutingToolCalls((prev) => [...prev, ...toolCallsToRun]);
     setPendingToolCalls([]);
-    setTasks((prev) => [...prev, ...newTasks]);
-    await onSaveConversation(conversation, messages, [...tasks, ...newTasks]);
-
-    const toolResults = await executeToolCalls(toolCallsToRun);
-    const completedNewTasks = newTasks.map((task, index) => ({
-      ...task,
-      status: toolResults[index]?.result.success ? TaskStatus.COMPLETED : TaskStatus.FAILED,
-      result: toolResults[index]?.result,
-      updated_at: new Date()
-    }));
-    const updatedTasks = [...tasks, ...completedNewTasks];
-    const toolMessages = toolResults.map(({ toolCall, result }) =>
-      Agent.createToolMessage(toolCall, result)
-    ) as Message[];
-    const allMessages = [...messages, ...toolMessages];
-
-    setMessages(allMessages);
-    setTasks(updatedTasks);
-    setExecutingToolCalls([]);
-    await onSaveConversation(conversation, allMessages, updatedTasks);
-
-    const latestMemory = await loadMemory();
-    await continueConversation(conversation, allMessages, updatedTasks, latestMemory);
+    setIsLoading(true);
+    approvalResolverRef.current?.(true);
+    approvalResolverRef.current = null;
   };
 
-  const handleRejectToolCalls = () => {
+  const handleRejectToolCalls = async () => {
+    if (pendingToolCalls.length === 0) return;
+
     setPendingToolCalls([]);
+    setIsLoading(true);
+    approvalResolverRef.current?.(false);
+    approvalResolverRef.current = null;
   };
 
   /**
