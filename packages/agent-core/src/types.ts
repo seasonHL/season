@@ -187,6 +187,15 @@ export interface AgentSafetyOptions {
   };
 }
 
+export interface AgentContextCompactionOptions {
+  enabled?: boolean;
+  preserveRecentToolResults?: number;
+  maxToolResultChars?: number;
+  maxTotalMessageChars?: number;
+  truncatedMarker?: string;
+  compactedMarker?: string;
+}
+
 /**
  * Agent 初始化参数。
  *
@@ -204,4 +213,5 @@ export interface AgentOptions<TTaskRequest, TContext = unknown> {
   parseToolCall?: (toolCall: AgentToolCall) => TTaskRequest | null;
   createId?: () => string;
   safety?: AgentSafetyOptions;
+  contextCompaction?: AgentContextCompactionOptions;
 }

@@ -25,16 +25,61 @@ export const createHeaders = (apiKey: string): Record<string, string> => {
   return headers;
 };
 
-export const createRequestBody = (request: ChatRequest, stream: boolean): Record<string, any> => {
+type CacheableTextBlock = {
+  type: "text";
+  text: string;
+  cache_control?: { type: "ephemeral" };
+};
+
+const supportsOpenAICompatibleCacheControl = (baseUrl: string, model: string) => {
+  const target = `${baseUrl} ${model}`.toLowerCase();
+  return target.includes("dashscope") || target.includes("qwen");
+};
+
+const withEphemeralCacheControl = (text: string): CacheableTextBlock[] => [
+  {
+    type: "text",
+    text,
+    cache_control: { type: "ephemeral" },
+  },
+];
+
+const addPromptCacheBreakpoints = (request: ChatRequest, baseUrl: string): ChatRequest => {
+  if (!supportsOpenAICompatibleCacheControl(baseUrl, request.model)) {
+    return request;
+  }
+
+  const messages = request.messages.map((message) => ({ ...message }));
+  const systemIndex = messages.findIndex((message) => message.role === "system");
+  if (systemIndex >= 0 && typeof messages[systemIndex].content === "string") {
+    messages[systemIndex].content = withEphemeralCacheControl(messages[systemIndex].content);
+  }
+
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role !== "user" || typeof message.content !== "string") continue;
+    messages[index].content = withEphemeralCacheControl(message.content);
+    break;
+  }
+
+  return { ...request, messages };
+};
+
+export const createRequestBody = (
+  request: ChatRequest,
+  stream: boolean,
+  baseUrl = ""
+): Record<string, any> => {
+  const cacheAwareRequest = addPromptCacheBreakpoints(request, baseUrl);
   const requestBody: Record<string, any> = {
-    model: request.model,
-    messages: request.messages,
+    model: cacheAwareRequest.model,
+    messages: cacheAwareRequest.messages,
     stream
   };
 
-  if (request.tools && request.tools.length > 0) {
-    requestBody.tools = request.tools;
-    requestBody.tool_choice = request.tool_choice || "auto";
+  if (cacheAwareRequest.tools && cacheAwareRequest.tools.length > 0) {
+    requestBody.tools = cacheAwareRequest.tools;
+    requestBody.tool_choice = cacheAwareRequest.tool_choice || "auto";
   }
 
   return requestBody;

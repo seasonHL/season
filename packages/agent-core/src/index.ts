@@ -10,6 +10,7 @@ export {
 } from "./messages";
 export type {
   AgentChatMessage,
+  AgentContextCompactionOptions,
   AgentMessage,
   AgentMessageRole,
   AgentOptions,

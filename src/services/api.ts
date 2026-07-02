@@ -94,7 +94,7 @@ const sendSingleChatRequest = async (
   const response = await fetch(buildApiUrl(baseUrl), {
     method: "POST",
     headers: createHeaders(apiKey),
-    body: JSON.stringify(createRequestBody(request, request.stream ?? false))
+    body: JSON.stringify(createRequestBody(request, request.stream ?? false, baseUrl))
   });
 
   await assertOkResponse(response);
@@ -110,7 +110,7 @@ const sendSingleStreamingRequest = async (
   const response = await fetch(buildApiUrl(baseUrl), {
     method: "POST",
     headers: createHeaders(apiKey),
-    body: JSON.stringify(createRequestBody(request, true))
+    body: JSON.stringify(createRequestBody(request, true, baseUrl))
   });
 
   await assertOkResponse(response);

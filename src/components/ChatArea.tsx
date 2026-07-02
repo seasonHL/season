@@ -69,6 +69,11 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
       systemPrompt: buildSystemPrompt(memorySnapshot, skills, injectedSkills),
       toolRuntimes,
       initialMessages,
+      contextCompaction: {
+        preserveRecentToolResults: 4,
+        maxToolResultChars: 12_000,
+        maxTotalMessageChars: 160_000,
+      },
     });
   };
 
@@ -137,7 +142,9 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     activeConversation: Conversation,
     currentMessages: Message[],
     currentTasks: Task[],
-    memorySnapshot = memory
+    memorySnapshot = memory,
+    skills: SkillMetadata[] = [],
+    injectedSkills: SkillMetadata[] = []
   ) => {
     if (!hasConfiguredModel()) {
       setErrorMessage("请先在设置页面配置至少一个可用模型");
@@ -152,7 +159,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     let workingTasks = currentTasks;
     let activeBatchTasks: Task[] = [];
 
-    await getSessionAgent(currentMessages, memorySnapshot).runWithToolsStream({
+    await getSessionAgent(currentMessages, memorySnapshot, skills, injectedSkills).runWithToolsStream({
       context: { executeTask },
       stream: true,
       onStreamUpdate: ({ message }) => {
@@ -303,7 +310,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
       textareaRef.current.style.height = "auto";
     }
 
-    await continueConversation(activeConversation, currentMessages, tasks);
+    await continueConversation(activeConversation, currentMessages, tasks, memory, availableSkills, injectedSkills);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

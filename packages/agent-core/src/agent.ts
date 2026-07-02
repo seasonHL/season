@@ -13,6 +13,7 @@ import type {
   AgentProvider,
   AgentProviderRequest,
   AgentToolCall,
+  AgentContextCompactionOptions,
   AgentToolDefinition,
   AgentToolResult,
   AgentRunWithToolsOptions,
@@ -38,6 +39,7 @@ export class Agent<TTaskRequest = unknown, TContext = unknown> {
   private readonly parseToolCall?: (toolCall: AgentToolCall) => TTaskRequest | null;
   private readonly createId: () => string;
   private readonly safetyGuard: AgentSafetyGuard;
+  private readonly contextCompaction: AgentContextCompactionOptions;
 
   constructor(options: AgentOptions<TTaskRequest, TContext>) {
     this.model = options.model;
@@ -50,6 +52,7 @@ export class Agent<TTaskRequest = unknown, TContext = unknown> {
     this.parseToolCall = options.parseToolCall;
     this.createId = options.createId || defaultCreateId;
     this.safetyGuard = new AgentSafetyGuard(options.safety);
+    this.contextCompaction = options.contextCompaction || {};
   }
 
   get messages(): AgentMessage[] {
@@ -173,7 +176,7 @@ export class Agent<TTaskRequest = unknown, TContext = unknown> {
 
     const response = await this.provider.complete({
       model: this.model,
-      messages: toChatMessages(this.systemPrompt, this.history),
+      messages: toChatMessages(this.systemPrompt, this.history, this.contextCompaction),
       tools: this.tools,
       stream: false,
     });
@@ -266,7 +269,7 @@ export class Agent<TTaskRequest = unknown, TContext = unknown> {
   private createProviderRequest(stream: boolean): AgentProviderRequest {
     return {
       model: this.model,
-      messages: toChatMessages(this.systemPrompt, this.history),
+      messages: toChatMessages(this.systemPrompt, this.history, this.contextCompaction),
       tools: this.tools,
       stream,
     };

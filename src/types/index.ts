@@ -34,7 +34,11 @@ export interface ChatRequest {
   model: string;
   messages: Array<{
     role: "user" | "assistant" | "system" | "tool";
-    content: string | null;
+    content: string | null | Array<{
+      type: "text";
+      text: string;
+      cache_control?: { type: "ephemeral" };
+    }>;
     tool_calls?: ToolCall[];
     tool_call_id?: string;
     reasoning_content?: string;
