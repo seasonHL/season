@@ -42,6 +42,14 @@ pub struct TaskResult {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SkillMetadata {
+    pub name: String,
+    pub description: String,
+    pub path: String,
+    pub content: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ToolFunction {
     pub name: String,
     pub arguments: String,

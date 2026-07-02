@@ -5,6 +5,7 @@ import { useConfigContext } from "../contexts/ConfigContext";
 import { useMemory } from "../hooks/useMemory";
 import { useTaskExecutor } from "../hooks/useTaskExecutor";
 import { ApiChatProvider } from "../services/agentProvider";
+import { loadSkills, selectMentionedSkills, type SkillMetadata } from "../services/skills";
 import { toolRuntimes } from "../tools/registry";
 import { Conversation, Message, Task, TaskStatus, TaskRequest } from "../types";
 import ChatComposer from "./chat/ChatComposer";
@@ -56,11 +57,16 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
   const { executeTask } = useTaskExecutor();
   const { memory, loadMemory } = useMemory();
 
-  const createAgent = (initialMessages: Message[], memorySnapshot = memory) => {
+  const createAgent = (
+    initialMessages: Message[],
+    memorySnapshot = memory,
+    skills: SkillMetadata[] = [],
+    injectedSkills: SkillMetadata[] = []
+  ) => {
     return new Agent<TaskRequest, { executeTask: (action: TaskRequest["action"]) => Promise<ToolResult> }>({
       model: config.model,
       provider: new ApiChatProvider(config),
-      systemPrompt: buildSystemPrompt(memorySnapshot),
+      systemPrompt: buildSystemPrompt(memorySnapshot, skills, injectedSkills),
       toolRuntimes,
       initialMessages,
     });
@@ -106,9 +112,14 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
    * 默认复用 `agentRef` 中的实例；只有记忆快照显式变化时才重建，
    * 让后续请求使用新的 system prompt。
    */
-  const getSessionAgent = (currentMessages: Message[], memorySnapshot = memory) => {
-    if (!agentRef.current || memorySnapshot !== memory) {
-      agentRef.current = createAgent(currentMessages, memorySnapshot);
+  const getSessionAgent = (
+    currentMessages: Message[],
+    memorySnapshot = memory,
+    skills: SkillMetadata[] = [],
+    injectedSkills: SkillMetadata[] = []
+  ) => {
+    if (!agentRef.current || memorySnapshot !== memory || skills.length > 0 || injectedSkills.length > 0) {
+      agentRef.current = createAgent(currentMessages, memorySnapshot, skills, injectedSkills);
     } else {
       agentRef.current.setMessages(currentMessages);
     }
@@ -266,8 +277,19 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
       return;
     }
 
-    const agent = getSessionAgent(messages);
-    agent.appendUserMessage(inputText.trim());
+    const userInput = inputText.trim();
+    let availableSkills: SkillMetadata[] = [];
+    let injectedSkills: SkillMetadata[] = [];
+
+    try {
+      availableSkills = await loadSkills();
+      injectedSkills = selectMentionedSkills(userInput, availableSkills);
+    } catch (error) {
+      console.warn("Failed to load skills", error);
+    }
+
+    const agent = getSessionAgent(messages, memory, availableSkills, injectedSkills);
+    agent.appendUserMessage(userInput);
 
     const activeConversation = conversation ?? onCreateConversation();
     const currentMessages = agent.messages;

@@ -1,3 +1,5 @@
+import type { SkillMetadata } from "../services/skills";
+
 export const SYSTEM_PROMPT = `你是一个智能桌面助手，可以帮助用户完成各种任务。
 
 ## 你的能力
@@ -24,14 +26,64 @@ export const SYSTEM_PROMPT = `你是一个智能桌面助手，可以帮助用�
 - 需要执行操作时，使用工具调用，不要在回复中嵌入 <task> 标签
 - 保持回复简洁、有条理，使用中文`;
 
-export function buildSystemPrompt(memory: string): string {
-  const trimmedMemory = memory.trim();
-  if (!trimmedMemory) return SYSTEM_PROMPT;
+function buildSkillsSection(skills: SkillMetadata[]): string {
+  if (skills.length === 0) return "";
 
-  return `${SYSTEM_PROMPT}
+  const skillLines = skills.map((skill) =>
+    `- ${skill.name}: ${skill.description} (path: ${skill.path})`
+  );
+
+  return `
+
+## Skills
+A skill is a set of local instructions stored in a SKILL.md file. Below is the list of skills available in this session.
+
+### Available skills
+${skillLines.join("\n")}
+
+### How to use skills
+- If the user names a skill with $SkillName, use that skill for this turn.
+- If a task clearly matches a skill description, tell the user which skill seems relevant and use the available instructions when provided.
+- Skill bodies are loaded progressively. Do not assume details that are not present in the loaded skill content.`;
+}
+
+function buildInjectedSkillsSection(skills: SkillMetadata[]): string {
+  if (skills.length === 0) return "";
+
+  const skillBlocks = skills.map((skill) => `<skill>
+<name>${skill.name}</name>
+<path>${skill.path}</path>
+${skill.content}
+</skill>`);
+
+  return `
+
+## Loaded Skill Instructions
+The following SKILL.md files were explicitly selected for this turn. Follow them when they are relevant, and resolve relative paths against the directory containing the skill file.
+
+${skillBlocks.join("\n\n")}`;
+}
+
+export function buildSystemPrompt(
+  memory: string,
+  skills: SkillMetadata[] = [],
+  injectedSkills: SkillMetadata[] = []
+): string {
+  const trimmedMemory = memory.trim();
+  const sections = [
+    SYSTEM_PROMPT,
+    buildSkillsSection(skills),
+    buildInjectedSkillsSection(injectedSkills),
+  ];
+
+  if (trimmedMemory) {
+    sections.push(`
 
 ## 长期记忆
 以下是用户允许保存的长期记忆。回答时可以自然参考，但不要逐字复述，除非用户询问。
 
-${trimmedMemory}`;
+${trimmedMemory}`);
+  }
+
+  return sections.filter(Boolean).join("");
 }

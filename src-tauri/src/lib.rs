@@ -3,6 +3,7 @@ mod conversations;
 mod memory;
 mod models;
 mod security;
+mod skills;
 mod task;
 
 use config::{load_config, save_config};
@@ -10,6 +11,7 @@ use conversations::{
     delete_conversation, load_conversation, load_conversations, save_conversation,
 };
 use memory::{load_memory, save_memory};
+use skills::list_skills;
 use task::execute_task;
 
 #[tauri::command]
@@ -31,6 +33,7 @@ pub fn run() {
             execute_task,
             load_memory,
             save_memory,
+            list_skills,
             save_conversation,
             load_conversations,
             load_conversation,
