@@ -1,32 +1,100 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useConfigContext } from "../contexts/ConfigContext";
+import { ModelConfig } from "../types";
 
 interface SettingsProps {
   onBack: () => void;
 }
 
+const defaultModel = (index: number): ModelConfig => ({
+  id: crypto.randomUUID(),
+  name: index === 0 ? "主模型" : `备用模型 ${index}`,
+  base_url: "",
+  api_key: "",
+  model: "deepseek-v4-pro",
+  enabled: true,
+});
+
+const normalizeModels = (configModels: ModelConfig[] | undefined, fallback: Omit<ModelConfig, "id" | "name" | "enabled">) => {
+  if (configModels && configModels.length > 0) {
+    return configModels.map((item, index) => ({
+      ...item,
+      id: item.id || crypto.randomUUID(),
+      name: item.name || (index === 0 ? "主模型" : `备用模型 ${index}`),
+      enabled: item.enabled ?? true,
+    }));
+  }
+
+  return [{
+    id: "primary",
+    name: "主模型",
+    base_url: fallback.base_url,
+    api_key: fallback.api_key,
+    model: fallback.model || "deepseek-v4-pro",
+    enabled: true,
+  }];
+};
+
 function Settings({ onBack }: SettingsProps) {
   const { config, saveConfig } = useConfigContext();
-  const [baseUrl, setBaseUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("");
+  const [models, setModels] = useState<ModelConfig[]>([defaultModel(0)]);
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
-    console.log("Settings - config loaded:", config);
-    setBaseUrl(config.base_url || "");
-  }, [config.base_url]);
+    setModels(normalizeModels(config.models, {
+      base_url: config.base_url || "",
+      api_key: config.api_key || "",
+      model: config.model || "deepseek-v4-pro",
+    }));
+  }, [config]);
 
-  useEffect(() => {
-    setApiKey(config.api_key || "");
-  }, [config.api_key]);
+  const updateModel = (id: string, patch: Partial<ModelConfig>) => {
+    setModels((currentModels) =>
+      currentModels.map((item) => item.id === id ? { ...item, ...patch } : item)
+    );
+  };
 
-  useEffect(() => {
-    setModel(config.model || "deepseek-v4-pro");
-  }, [config.model]);
+  const addModel = () => {
+    setModels((currentModels) => [...currentModels, defaultModel(currentModels.length)]);
+  };
+
+  const removeModel = (id: string) => {
+    setModels((currentModels) =>
+      currentModels.length === 1 ? currentModels : currentModels.filter((item) => item.id !== id)
+    );
+  };
+
+  const moveModel = (id: string, direction: -1 | 1) => {
+    setModels((currentModels) => {
+      const index = currentModels.findIndex((item) => item.id === id);
+      const nextIndex = index + direction;
+      if (index === -1 || nextIndex < 0 || nextIndex >= currentModels.length) return currentModels;
+
+      const nextModels = [...currentModels];
+      const [item] = nextModels.splice(index, 1);
+      nextModels.splice(nextIndex, 0, item);
+      return nextModels;
+    });
+  };
 
   const handleSave = async () => {
-    await saveConfig({ base_url: baseUrl, api_key: apiKey, model: model });
+    const sanitizedModels = models.map((item, index) => ({
+      ...item,
+      id: item.id || crypto.randomUUID(),
+      name: item.name.trim() || (index === 0 ? "主模型" : `备用模型 ${index}`),
+      base_url: item.base_url.trim(),
+      api_key: item.api_key.trim(),
+      model: item.model.trim(),
+    }));
+    const primaryModel = sanitizedModels[0] || defaultModel(0);
+
+    await saveConfig({
+      base_url: primaryModel.base_url,
+      api_key: primaryModel.api_key,
+      model: primaryModel.model || "deepseek-v4-pro",
+      models: sanitizedModels,
+    });
+    setModels(sanitizedModels);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -38,19 +106,10 @@ function Settings({ onBack }: SettingsProps) {
           <button
             onClick={onBack}
             className="p-2.5 text-[#7d8d89] hover:text-[#18201e] hover:bg-[#eef4f2] rounded-lg transition-all duration-200"
+            title="返回"
           >
-            <svg
-              className="w-5.5 h-5.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
+            <svg className="w-5.5 h-5.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
           <h1 className="text-[#18201e] font-semibold text-lg">设置</h1>
@@ -58,134 +117,156 @@ function Settings({ onBack }: SettingsProps) {
       </header>
 
       <div className="flex-1 overflow-y-auto px-7 py-8">
-        <div className="max-w-2xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
           {showSuccess && (
             <div className="flex items-center gap-3 p-4 bg-[#ecf8f3] border border-[#b8ddcf] rounded-lg animate-slide-up">
               <div className="w-9 h-9 rounded-lg bg-[#d8f0e6] flex items-center justify-center flex-shrink-0">
-                <svg
-                  className="w-5 h-5 text-[#167a69]"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
+                <svg className="w-5 h-5 text-[#167a69]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
               <div>
-                <span className="text-[#167a69] text-sm font-semibold">
-                  保存成功！
-                </span>
-                <p className="text-[#5d7d74] text-xs">您的设置已保存</p>
+                <span className="text-[#167a69] text-sm font-semibold">保存成功！</span>
+                <p className="text-[#5d7d74] text-xs">模型配置已更新</p>
               </div>
             </div>
           )}
 
           <div className="bg-white rounded-lg p-7 border border-[#dce7e3] shadow-[0_20px_50px_rgba(31,45,43,0.08)]">
-            <div className="flex items-center gap-3 mb-7">
-              <div className="w-11 h-11 rounded-lg bg-[#e8f3f0] flex items-center justify-center">
-                <svg className="w-6 h-6 text-[#167a69]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-7">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-lg bg-[#e8f3f0] flex items-center justify-center">
+                  <svg className="w-6 h-6 text-[#167a69]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16M7 12h10M10 17h4" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-[#18201e] font-semibold text-lg">模型配置</h2>
+                  <p className="text-[#6d7d79] text-sm">按顺序尝试，主模型失败后切换到启用的备用模型</p>
+                </div>
+              </div>
+
+              <button
+                onClick={addModel}
+                className="h-10 px-4 bg-[#eef4f2] hover:bg-[#e3eeea] text-[#167a69] font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm"
+              >
+                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m7-7H5" />
                 </svg>
-              </div>
-              <div>
-                <h2 className="text-[#18201e] font-semibold text-lg">API 配置</h2>
-                <p className="text-[#6d7d79] text-sm">配置您的 API 连接信息</p>
-              </div>
+                新增模型
+              </button>
             </div>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-[#41504d] mb-3">
-                  Base URL
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <svg className="w-5 h-5 text-[#8b9895]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="https://api.deepseek.com"
-                    className="w-full pl-12 pr-4 py-4 bg-[#f8fbfa] border border-[#cfdeda] rounded-lg text-[#18201e] placeholder-[#9aa8a5] focus:outline-none focus:ring-2 focus:ring-[#167a69]/20 focus:border-[#167a69] transition-all duration-200 text-sm"
-                  />
-                </div>
-                <p className="mt-3 text-xs text-[#6d7d79] leading-relaxed">
-                  OpenAI 格式: https://api.deepseek.com<br/>
-                  Anthropic 格式: https://api.deepseek.com/anthropic
-                </p>
-              </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-[#41504d] mb-3">
-                  API Key
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <svg className="w-5 h-5 text-[#8b9895]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                    </svg>
-                  </div>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
-                    className="w-full pl-12 pr-4 py-4 bg-[#f8fbfa] border border-[#cfdeda] rounded-lg text-[#18201e] placeholder-[#9aa8a5] focus:outline-none focus:ring-2 focus:ring-[#167a69]/20 focus:border-[#167a69] transition-all duration-200 font-mono text-sm"
-                  />
-                </div>
-                <p className="mt-3 text-xs text-[#6d7d79]">
-                  请输入您的 API Key（将以 Bearer token 方式发送）
-                </p>
-              </div>
+            <div className="space-y-7">
+              {models.map((item, index) => (
+                <section key={item.id} className="border-t border-[#edf3f1] pt-7 first:border-t-0 first:pt-0">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <span className="w-8 h-8 rounded-lg bg-[#f2f7f5] border border-[#dce7e3] flex items-center justify-center text-sm font-semibold text-[#41504d]">
+                        {index + 1}
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-[#18201e]">
+                          {index === 0 ? "主模型" : "备用模型"}
+                        </p>
+                        <p className="text-xs text-[#6d7d79]">仅对可恢复错误执行下一个模型</p>
+                      </div>
+                    </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-[#41504d] mb-3">
-                  模型名称
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <svg className="w-5 h-5 text-[#8b9895]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                    </svg>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 px-3 h-9 rounded-lg bg-[#f8fbfa] border border-[#dce7e3] text-sm text-[#41504d]">
+                        <input
+                          type="checkbox"
+                          checked={item.enabled}
+                          onChange={(event) => updateModel(item.id, { enabled: event.target.checked })}
+                          className="accent-[#167a69]"
+                        />
+                        启用
+                      </label>
+                      <button
+                        onClick={() => moveModel(item.id, -1)}
+                        disabled={index === 0}
+                        className="w-9 h-9 rounded-lg border border-[#dce7e3] text-[#6d7d79] hover:text-[#18201e] hover:bg-[#f8fbfa] disabled:opacity-35 disabled:hover:bg-transparent transition-all"
+                        title="上移"
+                      >
+                        <svg className="w-4.5 h-4.5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => moveModel(item.id, 1)}
+                        disabled={index === models.length - 1}
+                        className="w-9 h-9 rounded-lg border border-[#dce7e3] text-[#6d7d79] hover:text-[#18201e] hover:bg-[#f8fbfa] disabled:opacity-35 disabled:hover:bg-transparent transition-all"
+                        title="下移"
+                      >
+                        <svg className="w-4.5 h-4.5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => removeModel(item.id)}
+                        disabled={models.length === 1}
+                        className="w-9 h-9 rounded-lg border border-[#f0c3bd] text-[#b33b32] hover:bg-[#fff2f0] disabled:opacity-35 disabled:hover:bg-transparent transition-all"
+                        title="删除"
+                      >
+                        <svg className="w-4.5 h-4.5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                  <input
-                    type="text"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    placeholder="deepseek-v4-pro"
-                    className="w-full pl-12 pr-4 py-4 bg-[#f8fbfa] border border-[#cfdeda] rounded-lg text-[#18201e] placeholder-[#9aa8a5] focus:outline-none focus:ring-2 focus:ring-[#167a69]/20 focus:border-[#167a69] transition-all duration-200 font-mono text-sm"
-                  />
-                </div>
-                <p className="mt-3 text-xs text-[#6d7d79]">
-                  例如: deepseek-v4-pro, gpt-4o, claude-3-sonnet
-                </p>
-              </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Field label="配置名称">
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={(event) => updateModel(item.id, { name: event.target.value })}
+                        placeholder="主模型"
+                        className="input-field"
+                      />
+                    </Field>
+
+                    <Field label="模型名称">
+                      <input
+                        type="text"
+                        value={item.model}
+                        onChange={(event) => updateModel(item.id, { model: event.target.value })}
+                        placeholder="deepseek-v4-pro"
+                        className="input-field font-mono"
+                      />
+                    </Field>
+
+                    <Field label="Base URL">
+                      <input
+                        type="text"
+                        value={item.base_url}
+                        onChange={(event) => updateModel(item.id, { base_url: event.target.value })}
+                        placeholder="https://api.deepseek.com"
+                        className="input-field"
+                      />
+                    </Field>
+
+                    <Field label="API Key">
+                      <input
+                        type="password"
+                        value={item.api_key}
+                        onChange={(event) => updateModel(item.id, { api_key: event.target.value })}
+                        placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+                        className="input-field font-mono"
+                      />
+                    </Field>
+                  </div>
+                </section>
+              ))}
 
               <div className="pt-3">
                 <button
                   onClick={handleSave}
                   className="w-full bg-[#167a69] hover:bg-[#126756] text-white font-semibold py-4 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2.5 shadow-[0_14px_28px_rgba(22,122,105,0.24)] active:scale-[0.98]"
                 >
-                  <svg
-                    className="w-5.5 h-5.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
+                  <svg className="w-5.5 h-5.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   保存设置
                 </button>
@@ -201,18 +282,27 @@ function Settings({ onBack }: SettingsProps) {
                 </svg>
               </div>
               <div>
-                <h2 className="text-[#18201e] font-semibold text-lg">关于</h2>
-                <p className="text-[#6d7d79] text-sm">应用信息</p>
+                <h2 className="text-[#18201e] font-semibold text-lg">容灾策略</h2>
+                <p className="text-[#6d7d79] text-sm">429、529、503、超时和网络断开会触发备用模型</p>
               </div>
             </div>
             <div className="space-y-3 text-sm text-[#6d7d79]">
-              <p>AI 助手桌面应用</p>
-              <p>基于 Tauri + React 构建</p>
+              <p>OpenAI 格式会自动请求 `/chat/completions`，包含 `anthropic` 的地址会请求 `/v1/messages`。</p>
+              <p>401、403、402、400 等不可恢复错误会直接停止，不会继续消耗备用模型。</p>
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-sm font-semibold text-[#41504d] mb-2">{label}</span>
+      {children}
+    </label>
   );
 }
 

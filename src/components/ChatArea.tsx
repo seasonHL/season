@@ -66,6 +66,13 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     });
   };
 
+  const hasConfiguredModel = () => {
+    if (config.models?.some((item) => item.enabled && item.base_url.trim() && item.model.trim())) {
+      return true;
+    }
+    return Boolean(config.base_url.trim());
+  };
+
   useEffect(() => {
     const conversationMessages = conversation?.messages || [];
     setMessages(conversationMessages);
@@ -80,7 +87,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
 
   useEffect(() => {
     agentRef.current = createAgent(messages);
-  }, [config.base_url, config.api_key, config.model, memory]);
+  }, [config.base_url, config.api_key, config.model, config.models, memory]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -121,8 +128,8 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     currentTasks: Task[],
     memorySnapshot = memory
   ) => {
-    if (!config.base_url) {
-      setErrorMessage("请先在设置页面配置 API 地址");
+    if (!hasConfiguredModel()) {
+      setErrorMessage("请先在设置页面配置至少一个可用模型");
       setIsLoading(false);
       return;
     }
@@ -254,8 +261,8 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
 
     setErrorMessage(null);
 
-    if (!config.base_url) {
-      setErrorMessage("请先在设置页面配置 API 地址");
+    if (!hasConfiguredModel()) {
+      setErrorMessage("请先在设置页面配置至少一个可用模型");
       return;
     }
 

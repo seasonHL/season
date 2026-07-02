@@ -81,6 +81,8 @@ export interface AgentProviderResponse {
   content: string;
   tool_calls?: AgentToolCall[];
   reasoning_content?: string;
+  finish_reason?: string;
+  output_tokens?: number;
 }
 
 export interface AgentProviderStreamChunk {
@@ -162,6 +164,27 @@ export interface AgentTurnResult<TTaskRequest> {
   toolCalls: Array<AgentToolCallRequest<TTaskRequest>>;
   messages: AgentMessage[];
   answer?: string;
+  finishReason?: string;
+  outputTokens?: number;
+}
+
+export interface AgentSafetyOptions {
+  loopDetection?: {
+    enabled?: boolean;
+    warningThreshold?: number;
+    criticalThreshold?: number;
+    breakThreshold?: number;
+  };
+  tokenBudget?: {
+    maxOutputTokens?: number;
+    nudgeRatio?: number;
+    lowIncrementThreshold?: number;
+    minTotalForDiminishingReturns?: number;
+    lowIncrementStreakLimit?: number;
+  };
+  truncationRecovery?: {
+    maxAttempts?: number;
+  };
 }
 
 /**
@@ -180,4 +203,5 @@ export interface AgentOptions<TTaskRequest, TContext = unknown> {
   maxIterations?: number;
   parseToolCall?: (toolCall: AgentToolCall) => TTaskRequest | null;
   createId?: () => string;
+  safety?: AgentSafetyOptions;
 }

@@ -80,6 +80,28 @@ body {
   animation: pulse-subtle 2s ease-in-out infinite;
 }
 
+.input-field {
+  width: 100%;
+  border: 1px solid #cfdeda;
+  border-radius: 8px;
+  background: #f8fbfa;
+  color: #18201e;
+  font-size: 0.875rem;
+  padding: 0.9rem 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.input-field::placeholder {
+  color: #9aa8a5;
+}
+
+.input-field:focus {
+  background: #ffffff;
+  border-color: #167a69;
+  box-shadow: 0 0 0 3px rgba(22, 122, 105, 0.14);
+  outline: none;
+}
+
 .markdown-message {
   font-size: 0.875rem;
   line-height: 1.65;

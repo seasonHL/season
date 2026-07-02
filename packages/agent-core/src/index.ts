@@ -16,6 +16,7 @@ export type {
   AgentProviderResponse,
   AgentProviderStreamChunk,
   AgentRunWithToolsOptions,
+  AgentSafetyOptions,
   AgentStreamUpdate,
   AgentToolCall,
   AgentToolCallRequest,

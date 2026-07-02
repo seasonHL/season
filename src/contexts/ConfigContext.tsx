@@ -10,9 +10,22 @@ interface ConfigContextType {
 }
 
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
+const defaultConfig: Config = {
+  base_url: '',
+  api_key: '',
+  model: 'deepseek-v4-pro',
+  models: [{
+    id: 'primary',
+    name: '主模型',
+    base_url: '',
+    api_key: '',
+    model: 'deepseek-v4-pro',
+    enabled: true,
+  }],
+};
 
 export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [config, setConfig] = useState<Config>({ base_url: '', api_key: '', model: 'deepseek-v4-pro' });
+  const [config, setConfig] = useState<Config>(defaultConfig);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const saveConfig = useCallback(async (newConfig: Config) => {

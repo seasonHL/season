@@ -17,6 +17,16 @@ export interface Config {
   base_url: string;
   api_key: string;
   model: string;
+  models?: ModelConfig[];
+}
+
+export interface ModelConfig {
+  id: string;
+  name: string;
+  base_url: string;
+  api_key: string;
+  model: string;
+  enabled: boolean;
 }
 
 export type View = "chat" | "settings";
@@ -50,6 +60,8 @@ export interface ChatResponse {
   tool_calls?: ToolCall[];
   reasoning_content?: string;
   error?: string;
+  finish_reason?: string;
+  output_tokens?: number;
 }
 
 const FileReadSchema = Type.Object({

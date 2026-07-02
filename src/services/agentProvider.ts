@@ -1,6 +1,6 @@
 import { AgentProvider, AgentProviderRequest, AgentProviderStreamChunk } from "@season/agent-core";
-import { Config } from "../types";
-import { sendChatMessage, sendChatMessageStream } from "./api";
+import { Config, ModelConfig } from "../types";
+import { isRetryableModelErrorMessage, sendChatMessage, sendChatMessageStream } from "./api";
 
 export class ApiChatProvider implements AgentProvider {
   readonly name = "openai-compatible";
@@ -8,42 +8,78 @@ export class ApiChatProvider implements AgentProvider {
   constructor(private readonly config: Config) {}
 
   async complete(request: AgentProviderRequest) {
-    if (!this.config.base_url) {
-      throw new Error("请先在设置页面配置 API 地址");
-    }
-
-    const response = await sendChatMessage(
-      this.config.base_url,
-      this.config.api_key,
-      request
+    return this.withModelFailover((modelConfig) =>
+      sendChatMessage(
+        modelConfig.base_url,
+        modelConfig.api_key,
+        { ...request, model: modelConfig.model }
+      )
     );
-
-    if (response.error) {
-      throw new Error(response.error);
-    }
-
-    return response;
   }
 
   async stream(
     request: AgentProviderRequest,
     onChunk: (chunk: AgentProviderStreamChunk) => void
   ) {
-    if (!this.config.base_url) {
-      throw new Error("请先在设置页面配置 API 地址");
-    }
+    return this.withModelFailover((modelConfig) =>
+      sendChatMessageStream(
+        modelConfig.base_url,
+        modelConfig.api_key,
+        { ...request, model: modelConfig.model },
+        onChunk
+      )
+    );
+  }
 
-    const response = await sendChatMessageStream(
-      this.config.base_url,
-      this.config.api_key,
-      request,
-      onChunk
+  private getModelConfigs(): ModelConfig[] {
+    const configuredModels = this.config.models?.filter((item) =>
+      item.enabled && item.base_url.trim() && item.model.trim()
     );
 
-    if (response.error) {
-      throw new Error(response.error);
+    if (configuredModels && configuredModels.length > 0) {
+      return configuredModels;
     }
 
-    return response;
+    if (!this.config.base_url) {
+      return [];
+    }
+
+    return [{
+      id: "legacy-primary",
+      name: "主模型",
+      base_url: this.config.base_url,
+      api_key: this.config.api_key,
+      model: this.config.model,
+      enabled: true,
+    }];
+  }
+
+  private async withModelFailover(
+    call: (modelConfig: ModelConfig) => ReturnType<typeof sendChatMessage>
+  ) {
+    const modelConfigs = this.getModelConfigs();
+    if (modelConfigs.length === 0) {
+      throw new Error("请先在设置页面配置至少一个可用模型");
+    }
+
+    const errors: string[] = [];
+
+    for (let index = 0; index < modelConfigs.length; index++) {
+      const modelConfig = modelConfigs[index];
+      const response = await call(modelConfig);
+
+      if (!response.error) {
+        return response;
+      }
+
+      const label = modelConfig.name || modelConfig.model;
+      errors.push(`${label}: ${response.error}`);
+
+      if (!isRetryableModelErrorMessage(response.error) || index === modelConfigs.length - 1) {
+        throw new Error(errors.join("\n"));
+      }
+    }
+
+    throw new Error(errors.join("\n") || "模型请求失败");
   }
 }

@@ -5,6 +5,18 @@ pub struct Config {
     pub base_url: String,
     pub api_key: String,
     pub model: String,
+    #[serde(default)]
+    pub models: Vec<ModelConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ModelConfig {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    pub api_key: String,
+    pub model: String,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
