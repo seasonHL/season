@@ -38,6 +38,13 @@ function TaskConfirmation({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
         );
+      case "MemoryWrite":
+        return (
+          <svg className="w-5.5 h-5.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h8l4 4v12a2 2 0 01-2 2H7a2 2 0 01-2-2V5z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6M9 17h4" />
+          </svg>
+        );
       default:
         return null;
     }
@@ -51,6 +58,8 @@ function TaskConfirmation({
         return { text: "text-[#8d6a16]", bg: "bg-[#fbf8ef]", border: "border-[#eee0b6]" };
       case "ExecuteCommand":
         return { text: "text-[#167a69]", bg: "bg-[#e8f3f0]", border: "border-[#b8ddcf]" };
+      case "MemoryWrite":
+        return { text: "text-[#6b5ca5]", bg: "bg-[#f0eef8]", border: "border-[#d2caec]" };
       default:
         return { text: "text-[#6d7d79]", bg: "bg-[#eef4f2]", border: "border-[#dce7e3]" };
     }
@@ -64,6 +73,8 @@ function TaskConfirmation({
         return "写入文件";
       case "ExecuteCommand":
         return "执行命令";
+      case "MemoryWrite":
+        return "写入记忆";
       default:
         return "未知操作";
     }
@@ -119,6 +130,18 @@ function TaskConfirmation({
                 </code>
               </p>
             )}
+          </div>
+        );
+
+      case "MemoryWrite":
+        return (
+          <div className="space-y-2">
+            <p className="text-sm text-[#41504d]">
+              <span className="text-[#7d8d89] font-medium">内容:</span>
+            </p>
+            <pre className="text-xs text-[#53635f] bg-[#f8fbfa] p-3 rounded-lg max-h-32 overflow-y-auto font-mono border border-[#dce7e3]">
+              {action.payload?.content || "未指定"}
+            </pre>
           </div>
         );
 
