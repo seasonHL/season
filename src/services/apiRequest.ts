@@ -13,13 +13,20 @@ export const buildApiUrl = (baseUrl: string): string => {
   return `${url}/chat/completions`;
 };
 
-export const createHeaders = (apiKey: string): Record<string, string> => {
+export const createHeaders = (
+  apiKey: string,
+  useApiKeyHeader = false
+): Record<string, string> => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
   };
 
   if (apiKey) {
-    headers["Authorization"] = `Bearer ${apiKey}`;
+    if (useApiKeyHeader) {
+      headers["x-api-key"] = apiKey;
+    } else {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
   }
 
   return headers;

@@ -23,6 +23,8 @@ export interface Config {
 export interface ModelConfig {
   id: string;
   name: string;
+  provider: string;
+  provider_name?: string;
   base_url: string;
   api_key: string;
   model: string;

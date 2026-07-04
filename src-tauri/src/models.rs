@@ -13,10 +13,18 @@ pub struct Config {
 pub struct ModelConfig {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_provider")]
+    pub provider: String,
+    #[serde(default)]
+    pub provider_name: Option<String>,
     pub base_url: String,
     pub api_key: String,
     pub model: String,
     pub enabled: bool,
+}
+
+fn default_provider() -> String {
+    "default".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

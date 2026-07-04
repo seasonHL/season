@@ -40,6 +40,8 @@ pub async fn load_config(app: tauri::AppHandle) -> Result<Config, String> {
         models.push(ModelConfig {
             id: "primary".to_string(),
             name: "主模型".to_string(),
+            provider: "default".to_string(),
+            provider_name: Some("Default".to_string()),
             base_url: base_url.clone(),
             api_key: api_key.clone(),
             model: model.clone(),

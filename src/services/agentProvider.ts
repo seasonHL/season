@@ -47,6 +47,8 @@ export class ApiChatProvider implements AgentProvider {
     return [{
       id: "legacy-primary",
       name: "主模型",
+      provider: "default",
+      provider_name: "Default",
       base_url: this.config.base_url,
       api_key: this.config.api_key,
       model: this.config.model,

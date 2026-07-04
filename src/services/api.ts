@@ -11,7 +11,8 @@ export { isRetryableModelErrorMessage } from "./apiErrors";
 export const sendChatMessage = async (
   baseUrl: string,
   apiKey: string,
-  request: ChatRequest
+  request: ChatRequest,
+  useApiKeyHeader = false
 ): Promise<ChatResponse> => {
   try {
     if (!baseUrl) {
@@ -21,7 +22,7 @@ export const sendChatMessage = async (
       };
     }
 
-    return await withRetry(() => sendSingleChatRequest(baseUrl, apiKey, request));
+    return await withRetry(() => sendSingleChatRequest(baseUrl, apiKey, request, useApiKeyHeader));
   }
   catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
@@ -36,7 +37,8 @@ export const sendChatMessageStream = async (
   baseUrl: string,
   apiKey: string,
   request: ChatRequest,
-  onChunk: (chunk: ChatStreamChunk) => void
+  onChunk: (chunk: ChatStreamChunk) => void,
+  useApiKeyHeader = false
 ): Promise<ChatResponse> => {
   try {
     if (!baseUrl) {
@@ -51,7 +53,7 @@ export const sendChatMessageStream = async (
 
     try {
       streamResponse = await withRetry(
-        () => sendSingleStreamingRequest(baseUrl, apiKey, request, onChunk),
+        () => sendSingleStreamingRequest(baseUrl, apiKey, request, onChunk, useApiKeyHeader),
         {
           onRetryableError: (error) => {
             if (error.status === 529) {
@@ -73,7 +75,7 @@ export const sendChatMessageStream = async (
     }
 
     return await withRetry(
-      () => sendSingleChatRequest(baseUrl, apiKey, { ...request, stream: false }),
+      () => sendSingleChatRequest(baseUrl, apiKey, { ...request, stream: false }, useApiKeyHeader),
       { maxRetries: 2, initialOverloadedCount: overloadedCount }
     );
   }
@@ -89,11 +91,12 @@ export const sendChatMessageStream = async (
 const sendSingleChatRequest = async (
   baseUrl: string,
   apiKey: string,
-  request: ChatRequest
+  request: ChatRequest,
+  useApiKeyHeader: boolean
 ): Promise<ChatResponse> => {
   const response = await fetch(buildApiUrl(baseUrl), {
     method: "POST",
-    headers: createHeaders(apiKey),
+    headers: createHeaders(apiKey, useApiKeyHeader),
     body: JSON.stringify(createRequestBody(request, request.stream ?? false, baseUrl))
   });
 
@@ -105,11 +108,12 @@ const sendSingleStreamingRequest = async (
   baseUrl: string,
   apiKey: string,
   request: ChatRequest,
-  onChunk: (chunk: ChatStreamChunk) => void
+  onChunk: (chunk: ChatStreamChunk) => void,
+  useApiKeyHeader: boolean
 ): Promise<ChatResponse> => {
   const response = await fetch(buildApiUrl(baseUrl), {
     method: "POST",
-    headers: createHeaders(apiKey),
+    headers: createHeaders(apiKey, useApiKeyHeader),
     body: JSON.stringify(createRequestBody(request, true, baseUrl))
   });
 

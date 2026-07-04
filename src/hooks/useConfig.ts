@@ -9,6 +9,8 @@ const defaultConfig: Config = {
   models: [{
     id: 'primary',
     name: '主模型',
+    provider: 'default',
+    provider_name: 'Default',
     base_url: '',
     api_key: '',
     model: 'deepseek-v4-pro',
