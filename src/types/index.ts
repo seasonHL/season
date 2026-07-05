@@ -20,6 +20,8 @@ export interface Config {
   models?: ModelConfig[];
 }
 
+export type PermissionMode = "full-access" | "ask-first" | "chat-only";
+
 export interface ModelConfig {
   id: string;
   name: string;
@@ -104,6 +106,7 @@ export type TaskActionSchema = typeof FileReadSchema | typeof FileWriteSchema | 
 export type TaskAction = Static<TaskActionSchema>;
 export interface TaskRequest {
  action: TaskAction;
+ permissionMode?: PermissionMode;
 }
 export interface TaskResult {
  success: boolean;

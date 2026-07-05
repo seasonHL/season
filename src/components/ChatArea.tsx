@@ -5,9 +5,10 @@ import { useConfigContext } from "../contexts/ConfigContext";
 import { useMemory } from "../hooks/useMemory";
 import { useTaskExecutor } from "../hooks/useTaskExecutor";
 import { ApiChatProvider } from "../services/agentProvider";
+import { buildUserInputWithAttachmentReferences } from "../services/attachments";
 import { loadSkills, selectMentionedSkills, type SkillMetadata } from "../services/skills";
 import { toolRuntimes } from "../tools/registry";
-import { Conversation, Message, Task, TaskStatus, TaskRequest } from "../types";
+import { Conversation, Message, PermissionMode, Task, TaskStatus, TaskRequest } from "../types";
 import ChatComposer from "./chat/ChatComposer";
 import ChatHeader from "./chat/ChatHeader";
 import ChatMessageList from "./chat/ChatMessageList";
@@ -31,6 +32,11 @@ type ToolResult = {
   error?: string;
 };
 
+type DesktopAgentContext = {
+  executeTask: (action: TaskRequest["action"]) => Promise<ToolResult>;
+  permissionMode: PermissionMode;
+};
+
 function upsertMessage(messages: Message[], message: Message) {
   const existingIndex = messages.findIndex((item) => item.id === message.id);
   if (existingIndex === -1) {
@@ -44,17 +50,19 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
   const [messages, setMessages] = useState<Message[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [inputText, setInputText] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>("full-access");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingToolCalls, setPendingToolCalls] = useState<ToolCallItem[]>([]);
   const [executingToolCalls, setExecutingToolCalls] = useState<ToolCallItem[]>([]);
   const [streamingAssistantId, setStreamingAssistantId] = useState<string | null>(null);
-  const agentRef = useRef<Agent<TaskRequest, { executeTask: (action: TaskRequest["action"]) => Promise<ToolResult> }> | null>(null);
+  const agentRef = useRef<Agent<TaskRequest, DesktopAgentContext> | null>(null);
   const approvalResolverRef = useRef<((approved: boolean) => void) | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { config } = useConfigContext();
-  const { executeTask } = useTaskExecutor();
+  const { executeTask } = useTaskExecutor(permissionMode);
   const { memory, loadMemory } = useMemory();
 
   const createAgent = (
@@ -63,7 +71,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     skills: SkillMetadata[] = [],
     injectedSkills: SkillMetadata[] = []
   ) => {
-    return new Agent<TaskRequest, { executeTask: (action: TaskRequest["action"]) => Promise<ToolResult> }>({
+    return new Agent<TaskRequest, DesktopAgentContext>({
       model: config.model,
       provider: new ApiChatProvider(config),
       systemPrompt: buildSystemPrompt(memorySnapshot, skills, injectedSkills),
@@ -89,6 +97,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     setMessages(conversationMessages);
     setTasks(conversation?.tasks || []);
     setInputText("");
+    setAttachments([]);
     setErrorMessage(null);
     setPendingToolCalls([]);
     setExecutingToolCalls([]);
@@ -160,7 +169,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
     let activeBatchTasks: Task[] = [];
 
     await getSessionAgent(currentMessages, memorySnapshot, skills, injectedSkills).runWithToolsStream({
-      context: { executeTask },
+      context: { executeTask, permissionMode },
       stream: true,
       onStreamUpdate: ({ message }) => {
         if (!message.content && !message.reasoning_content && !message.tool_calls?.length) {
@@ -275,7 +284,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
    * 追加用户消息，先持久化乐观状态，再启动流式模型回合。
    */
   const handleSendMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
+    if ((!inputText.trim() && attachments.length === 0) || isLoading) return;
 
     setErrorMessage(null);
 
@@ -284,7 +293,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
       return;
     }
 
-    const userInput = inputText.trim();
+    const userInput = await buildUserInputWithAttachmentReferences(inputText, attachments);
     let availableSkills: SkillMetadata[] = [];
     let injectedSkills: SkillMetadata[] = [];
 
@@ -303,6 +312,7 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
 
     setMessages(currentMessages);
     setInputText("");
+    setAttachments([]);
     setIsLoading(true);
     await onSaveConversation(activeConversation, currentMessages, tasks);
 
@@ -340,7 +350,11 @@ function ChatArea({ conversation, onCreateConversation, onSaveConversation }: Ch
         textareaRef={textareaRef}
         onChange={handleTextareaChange}
         onKeyDown={handleKeyDown}
+        onAttachmentsChange={setAttachments}
+        permissionMode={permissionMode}
+        onPermissionModeChange={setPermissionMode}
         onSend={handleSendMessage}
+        attachmentCount={attachments.length}
       />
 
       {pendingToolCalls.length > 0 && (

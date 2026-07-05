@@ -1,7 +1,8 @@
-import type { TaskAction, TaskRequest, TaskResult } from "../types";
+import type { PermissionMode, TaskAction, TaskRequest, TaskResult } from "../types";
 
 export interface DesktopToolContext {
   executeTask: (action: TaskAction) => Promise<TaskResult>;
+  permissionMode: PermissionMode;
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {

@@ -1,3 +1,4 @@
+use crate::attachments::{is_saved_attachment_path, read_file_for_model};
 use crate::memory::{append_memory, read_memory};
 use crate::models::{TaskAction, TaskRequest, TaskResult};
 use crate::security::{is_command_allowed, is_path_safe};
@@ -6,9 +7,11 @@ use std::process::Command as ProcessCommand;
 
 #[tauri::command]
 pub async fn execute_task(app: tauri::AppHandle, request: TaskRequest) -> TaskResult {
+    let has_full_access = request.permission_mode.as_deref() == Some("full-access");
+
     match request.action {
         TaskAction::FileRead { path } => {
-            if !is_path_safe(&path) {
+            if !has_full_access && !is_path_safe(&path) && !is_saved_attachment_path(&app, &path) {
                 return TaskResult {
                     success: false,
                     data: None,
@@ -16,7 +19,7 @@ pub async fn execute_task(app: tauri::AppHandle, request: TaskRequest) -> TaskRe
                 };
             }
 
-            match fs::read_to_string(&path) {
+            match read_file_for_model(&path) {
                 Ok(content) => TaskResult {
                     success: true,
                     data: Some(content),
@@ -30,7 +33,7 @@ pub async fn execute_task(app: tauri::AppHandle, request: TaskRequest) -> TaskRe
             }
         }
         TaskAction::FileWrite { path, content } => {
-            if !is_path_safe(&path) {
+            if !has_full_access && !is_path_safe(&path) {
                 return TaskResult {
                     success: false,
                     data: None,
@@ -52,7 +55,7 @@ pub async fn execute_task(app: tauri::AppHandle, request: TaskRequest) -> TaskRe
             }
         }
         TaskAction::ExecuteCommand { command, args } => {
-            if !is_command_allowed(&command, &args) {
+            if !has_full_access && !is_command_allowed(&command, &args) {
                 return TaskResult {
                     success: false,
                     data: None,

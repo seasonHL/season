@@ -40,6 +40,8 @@ pub enum TaskAction {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TaskRequest {
     pub action: TaskAction,
+    #[serde(default)]
+    pub permission_mode: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

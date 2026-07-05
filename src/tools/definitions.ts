@@ -5,7 +5,7 @@ export const fileReadToolDefinition: AgentToolDefinition = {
   function: {
     name: "FileRead",
     description:
-      "读取本地文件内容。适用于查看文本文件、配置文件、代码文件等。注意：只返回文本内容，图片等二进制文件无法读取。",
+      "读取本地文件内容。适用于查看文本文件、配置文件、代码文件，以及用户上传附件的路径。读取 Excel/ODS 表格附件时会在本地自动解析为文本/CSV；图片等不支持的二进制文件只会返回无法解析提示。",
     parameters: {
       type: "object",
       properties: {

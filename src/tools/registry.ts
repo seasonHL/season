@@ -29,14 +29,14 @@ export const toolRuntimes: AgentToolRuntime<TaskRequest, DesktopToolContext>[] =
     name: "FileWrite",
     definition: fileWriteToolDefinition,
     parse: parseFileWriteRequest,
-    requiresApproval: () => true,
+    requiresApproval: (_request, _toolCall, context) => context.permissionMode !== "full-access",
     execute: (taskRequest, _toolCall, context) => executeTaskRequest(context, taskRequest),
   },
   {
     name: "ExecuteCommand",
     definition: executeCommandToolDefinition,
     parse: parseExecuteCommandRequest,
-    requiresApproval: () => true,
+    requiresApproval: (_request, _toolCall, context) => context.permissionMode !== "full-access",
     execute: (taskRequest, _toolCall, context) => executeTaskRequest(context, taskRequest),
   },
   {
@@ -50,7 +50,7 @@ export const toolRuntimes: AgentToolRuntime<TaskRequest, DesktopToolContext>[] =
     name: "MemoryWrite",
     definition: memoryWriteToolDefinition,
     parse: parseMemoryWriteRequest,
-    requiresApproval: () => true,
+    requiresApproval: (_request, _toolCall, context) => context.permissionMode !== "full-access",
     execute: (taskRequest, _toolCall, context) => executeTaskRequest(context, taskRequest),
   },
 ];

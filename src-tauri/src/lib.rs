@@ -1,3 +1,4 @@
+mod attachments;
 mod config;
 mod conversations;
 mod memory;
@@ -6,6 +7,7 @@ mod security;
 mod skills;
 mod task;
 
+use attachments::save_attachment;
 use config::{load_config, save_config};
 use conversations::{
     delete_conversation, load_conversation, load_conversations, save_conversation,
@@ -28,6 +30,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            save_attachment,
             save_config,
             load_config,
             execute_task,
