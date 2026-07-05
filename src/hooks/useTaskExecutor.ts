@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { TaskAction, TaskRequest, TaskResult } from '../types';
-import { executeTaskWithAgent } from '../services/api';
-export const useTaskExecutor = () => {
+import { PermissionMode, TaskAction, TaskRequest, TaskResult } from '../types';
+
+export const useTaskExecutor = (permissionMode: PermissionMode) => {
  const executeTask = useCallback(async (action: TaskAction): Promise<TaskResult> => {
  try {
- const request: TaskRequest = { action };
+ const request: TaskRequest = { action, permissionMode };
  const result = await invoke<TaskResult>('execute_task', { request });
  return result;
  }
@@ -15,12 +15,8 @@ export const useTaskExecutor = () => {
  error: error instanceof Error ? error.message : 'Unknown error',
  };
  }
- }, []);
- const executeTaskAgent = useCallback(async (action: TaskAction): Promise<TaskResult> => {
- return executeTaskWithAgent(action);
- }, []);
+ }, [permissionMode]);
  return {
  executeTask,
- executeTaskAgent,
  };
 };

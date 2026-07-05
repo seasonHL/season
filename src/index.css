@@ -1,1 +1,313 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.985 0.006 170);
+  --foreground: oklch(0.18 0.018 170);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.46 0.095 170);
+  --primary-foreground: oklch(0.985 0.006 170);
+  --secondary: oklch(0.94 0.012 170);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.95 0.01 170);
+  --muted-foreground: oklch(0.49 0.025 170);
+  --accent: oklch(0.93 0.018 170);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.58 0.19 28);
+  --border: oklch(0.9 0.012 170);
+  --input: oklch(0.88 0.012 170);
+  --ring: oklch(0.58 0.08 170);
+  color: #18201e;
+  background: #f7faf9;
+  font-family: "Avenir Next", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(22, 122, 105, 0.09), transparent 32%),
+    linear-gradient(315deg, rgba(213, 161, 49, 0.12), transparent 30%),
+    #f7faf9;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c8d8d4;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9fb7b1;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.18s ease-out;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+.input-field {
+  width: 100%;
+  border: 1px solid #cfdeda;
+  border-radius: 8px;
+  background: #f8fbfa;
+  color: #18201e;
+  font-size: 0.875rem;
+  padding: 0.9rem 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.input-field::placeholder {
+  color: #9aa8a5;
+}
+
+.input-field:focus {
+  background: #ffffff;
+  border-color: #167a69;
+  box-shadow: 0 0 0 3px rgba(22, 122, 105, 0.14);
+  outline: none;
+}
+
+.markdown-message {
+  font-size: 0.875rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.markdown-message > :first-child {
+  margin-top: 0;
+}
+
+.markdown-message > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-message p,
+.markdown-message ul,
+.markdown-message ol,
+.markdown-message blockquote,
+.markdown-message pre,
+.markdown-message table {
+  margin: 0.55rem 0;
+}
+
+.markdown-message ul,
+.markdown-message ol {
+  padding-left: 1.35rem;
+}
+
+.markdown-message ul {
+  list-style: disc;
+}
+
+.markdown-message ol {
+  list-style: decimal;
+}
+
+.markdown-message li + li {
+  margin-top: 0.25rem;
+}
+
+.markdown-message h1,
+.markdown-message h2,
+.markdown-message h3,
+.markdown-message h4,
+.markdown-message h5,
+.markdown-message h6 {
+  margin: 0.85rem 0 0.4rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.markdown-message h1 {
+  font-size: 1.25rem;
+}
+
+.markdown-message h2 {
+  font-size: 1.125rem;
+}
+
+.markdown-message h3,
+.markdown-message h4,
+.markdown-message h5,
+.markdown-message h6 {
+  font-size: 1rem;
+}
+
+.markdown-message a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.markdown-message-assistant a {
+  color: #0f766e;
+}
+
+.markdown-message-tool a {
+  color: #2f6f8f;
+}
+
+.markdown-message-user a {
+  color: #f6d98d;
+}
+
+.markdown-message code {
+  border-radius: 6px;
+  font-family: ui-monospace, "SFMono-Regular", "SF Mono", Consolas, monospace;
+  font-size: 0.82em;
+  padding: 0.12rem 0.35rem;
+}
+
+.markdown-message-assistant code {
+  background: #edf5f2;
+  color: #234640;
+}
+
+.markdown-message-tool code {
+  background: #e5f0f4;
+  color: #244b5e;
+}
+
+.markdown-message-user code {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff7db;
+}
+
+.markdown-message pre {
+  border-radius: 8px;
+  overflow-x: auto;
+  padding: 0.85rem;
+}
+
+.markdown-message pre code {
+  background: transparent;
+  color: inherit;
+  display: block;
+  padding: 0;
+  white-space: pre;
+}
+
+.markdown-message-assistant pre {
+  background: #f4f8f7;
+  border: 1px solid #e1ece9;
+  color: #243b37;
+}
+
+.markdown-message-tool pre {
+  background: #eef6f8;
+  border: 1px solid #d6e8ee;
+  color: #243f4d;
+}
+
+.markdown-message-user pre {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.markdown-message blockquote {
+  border-left: 3px solid currentColor;
+  opacity: 0.86;
+  padding-left: 0.8rem;
+}
+
+.markdown-message table {
+  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.markdown-message th,
+.markdown-message td {
+  border: 1px solid currentColor;
+  padding: 0.4rem 0.55rem;
+}
+
+.markdown-message th {
+  font-weight: 700;
+}

@@ -2,8 +2,24 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Config } from '../types';
 
+const defaultConfig: Config = {
+  base_url: '',
+  api_key: '',
+  model: 'deepseek-v4-pro',
+  models: [{
+    id: 'primary',
+    name: '主模型',
+    provider: 'default',
+    provider_name: 'Default',
+    base_url: '',
+    api_key: '',
+    model: 'deepseek-v4-pro',
+    enabled: true,
+  }],
+};
+
 export const useConfig = () => {
-  const [config, setConfig] = useState<Config>({ base_url: '', api_key: '', model: 'deepseek-v4-pro' });
+  const [config, setConfig] = useState<Config>(defaultConfig);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const saveConfig = async (newConfig: Config) => {
